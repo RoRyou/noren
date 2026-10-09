@@ -23,7 +23,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import subprocess
 import sys
 import tempfile
@@ -40,6 +39,7 @@ from google import genai  # noqa: E402
 from google.genai import types  # noqa: E402
 
 from app.config import settings  # noqa: E402
+from app.genai_client import describe, make_client  # noqa: E402
 
 IN_RATE = 16000
 OUT_RATE = 24000
@@ -206,11 +206,12 @@ async def main() -> int:
     parser.add_argument("--repeat", type=int, default=1, help="run each case N times (silent-turn rate)")
     args = parser.parse_args()
 
-    if not (settings.google_api_key or os.environ.get("GOOGLE_API_KEY")):
+    if not settings.google_genai_use_vertexai and not settings.google_api_key:
         print("GOOGLE_API_KEY is not set (.env). Aborting.", file=sys.stderr)
         return 2
 
-    client = genai.Client(api_key=settings.google_api_key or None)
+    client = make_client()
+    print(f"backend: {describe()} model={settings.live_model}")
     out_dir = REPO_ROOT / "logs" / "live_smoke" / datetime.now().strftime("%Y%m%d-%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -226,7 +227,7 @@ async def main() -> int:
             print(json.dumps(asdict(r), ensure_ascii=False))
 
     (out_dir / "report.json").write_text(
-        json.dumps({"model": settings.live_model, "results": [asdict(r) for r in results]}, ensure_ascii=False, indent=2)
+        json.dumps({"model": settings.live_model, "backend": describe(), "results": [asdict(r) for r in results]}, ensure_ascii=False, indent=2)
     )
     print(f"\nreport: {out_dir / 'report.json'}")
     return 0 if all(r.ok for r in results) else 1
