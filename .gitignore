@@ -1,0 +1,23 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+service-account*.json
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# node
+node_modules/
+dist/
+
+# misc
+.DS_Store
+logs/
+
+# internal planning notes (not for reviewers)
+notes/
