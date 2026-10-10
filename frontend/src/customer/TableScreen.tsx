@@ -86,6 +86,8 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
           mic.current.stop();
           player.current.stop();
           setVoiceState(m.state);
+          if (m.state === "unavailable") setBanner(t(lang, "voiceUnavailable"));
+          if (m.reason === "error") setBanner(t(lang, "voiceError"));
         } else setVoiceState(m.state);
         break;
       case "transcript":

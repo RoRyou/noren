@@ -62,6 +62,10 @@ class VoiceSession:
         self.metrics: dict = {"tool_calls": [], "first_audio_ms": [], "turns": 0}
         self._input_end: float | None = None
 
+    def duration_s(self) -> float:
+        """会話を開いていた秒数（費用の上限の計算に使う）。"""
+        return time.monotonic() - self.opened_at if self.opened_at else 0.0
+
     def correlation(self) -> str:
         return f"{self.session_id}:t{self.turn}"
 

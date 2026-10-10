@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # デモ店の時刻（ラストオーダーなどの判定に使う）。審査員がいつ試してもいいように固定する。空なら実時刻
     demo_clock: str = "19:00"
 
+    # 音声の会話のサイト全体の上限（1 日あたりの分）。超えたら文字とタッチだけになる
+    daily_voice_minutes: int = 300
+
     # コスト対策：無通話の Live セッションは閉じ、同時セッション数に上限を設ける
     live_idle_timeout_s: int = 120
     live_max_concurrent_sessions: int = 20

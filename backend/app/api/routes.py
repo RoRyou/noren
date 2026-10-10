@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.api.context import COOKIE, DEMO_TTL_S, Ctx, create_demo_store, http_ctx, verify
+from app.api.limits import allow_demo_creation
 from app.domain.models import LineStatus
 from app.domain.orders import TransitionError
 from app.realtime.hub import hub
@@ -28,6 +29,9 @@ async def demo_start(request: Request, response: Response, reset: bool = False) 
     current = verify(request.cookies.get(COOKIE))
     if current and not reset:
         return {"store_id": current, "created": False}
+    ip = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "")).split(",")[0].strip()
+    if not allow_demo_creation(ip):
+        raise HTTPException(429, "too_many_demo_stores")
     store_id, token = await create_demo_store()
     response.set_cookie(COOKIE, token, max_age=DEMO_TTL_S, httponly=True, samesite="lax")
     return {"store_id": store_id, "created": True, "token": token}

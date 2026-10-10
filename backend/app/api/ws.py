@@ -17,7 +17,8 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.agent.live import VoiceSession
-from app.api.context import ws_ctx
+from app.api.context import client, ws_ctx
+from app.api.limits import VoiceBudget
 from app.realtime.hub import hub
 
 log = logging.getLogger("noren.ws")
@@ -53,6 +54,7 @@ async def table_ws(ws: WebSocket, sid: str):
                 pass
 
     target = f"table:{sid}"
+    budget = VoiceBudget(client())
     q = hub.subscribe(ctx.repo.store_id, target)
 
     async def forward():
@@ -84,6 +86,10 @@ async def table_ws(ws: WebSocket, sid: str):
                 if _active_voice >= MAX_VOICE_SESSIONS:
                     await send_json({"type": "voice_state", "state": "unavailable", "reason": "busy", "fallback": "touch"})
                     continue
+                limit = await budget.check(ctx.repo.store_id)
+                if limit:  # 費用の上限：文字とタッチで続けてもらう
+                    await send_json({"type": "voice_state", "state": "unavailable", "reason": limit, "fallback": "touch"})
+                    continue
                 voice = VoiceSession(ctx.svc, sid, send_json, send_audio)
                 _active_voice += 1
 
@@ -91,6 +97,7 @@ async def table_ws(ws: WebSocket, sid: str):
                     global _active_voice
                     await v.closed.wait()
                     _active_voice -= 1
+                    await budget.add(ctx.repo.store_id, v.duration_s())
 
                 asyncio.create_task(release())
                 await voice.open()

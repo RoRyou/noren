@@ -76,6 +76,11 @@ const dict = {
     en: "○ OK　✕ Contains　△ May have contact　？ Not confirmed",
   },
   demoClock: { ja: "デモの時刻 19:00", en: "Demo time 19:00" },
+  voiceUnavailable: {
+    ja: "ただいま音声の会話は混み合っているか、本日の上限に達しました。文字とタッチでご注文いただけます。",
+    en: "Voice is busy or has reached today's limit. You can still type or tap to order.",
+  },
+  voiceError: { ja: "音声が途切れました。文字とタッチで続けられます。", en: "Voice was interrupted. You can keep going by typing or tapping." },
 };
 
 export function t(lang: Lang, key: keyof typeof dict): string {
