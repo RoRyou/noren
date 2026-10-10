@@ -122,6 +122,14 @@ class Repo:
     async def save_session(self, session: TableSession) -> None:
         await self.col("sessions").document(session.id).set(_dump(session))
 
+    async def update_session(self, session_id: str, fields: dict) -> None:
+        """カート以外のフィールドだけを書き換える（カートはトランザクションで扱う）。"""
+        await self.col("sessions").document(session_id).update(fields)
+
+    async def append_turn(self, session_id: str, role: str, text: str) -> None:
+        await self.col("sessions").document(session_id).update(
+            {"recent_turns": firestore.ArrayUnion([{"role": role, "text": text, "at": now_iso()}])})
+
     async def open_sessions(self) -> list[TableSession]:
         out = []
         async for snap in self.col("sessions").where(filter=FieldFilter("status", "in", ["dining", "awaiting_prepay", "billing"])).stream():

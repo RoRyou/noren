@@ -1,5 +1,6 @@
 """環境変数から読み込む設定（ローカルは .env、Cloud Run は環境変数）。"""
 
+import os
 from pathlib import Path
 
 from pydantic import AliasChoices, Field
@@ -22,9 +23,24 @@ class Settings(BaseSettings):
     live_location: str = "us-central1"
     live_voice: str = "Kore"
 
+    # Firestore（ローカルはエミュレーター：FIRESTORE_EMULATOR_HOST を設定する）
+    firestore_project: str = ""
+    # デモ店の cookie の署名鍵（未設定なら起動ごとに生成。Cloud Run では環境変数で固定する）
+    demo_secret: str = ""
+    # デモ店の時刻（ラストオーダーなどの判定に使う）。審査員がいつ試してもいいように固定する。空なら実時刻
+    demo_clock: str = "19:00"
+
     # コスト対策：無通話の Live セッションは閉じ、同時セッション数に上限を設ける
     live_idle_timeout_s: int = 120
     live_max_concurrent_sessions: int = 20
 
 
 settings = Settings()
+
+# ローカルでは、個人アカウントの ADC ファイルを必ず使う（マシン既定の ADC は使わない）。
+# Google のクライアントは環境変数から認証情報を探すので、ここで設定しておく。Cloud Run では設定しない。
+if settings.google_application_credentials:
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.google_application_credentials
+if settings.google_genai_use_vertexai:
+    os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "TRUE")
+    os.environ.setdefault("GOOGLE_CLOUD_PROJECT", settings.google_cloud_project)

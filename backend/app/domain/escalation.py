@@ -59,11 +59,11 @@ def order_facts(session: TableSession, orders: list[Order]) -> str:
 
 
 def build_summary(table_no: str, reason: Reason, utterance_ja: str, session: TableSession, orders: list[Order],
-                  unknown_facts: list[str] | None = None) -> str:
-    """店員向けの日本語の要約。"""
+                  unknown_facts: list[str] | None = None, translated: bool = True) -> str:
+    """店員向けの日本語の要約。translated=False は文字起こしの原文のまま（キーワード検知から直接つないだとき）。"""
     parts = [f"{table_no}番：{REASON_JA[reason]}"]
     if utterance_ja:
-        parts.append(f"お客様の発言（訳）「{utterance_ja}」")
+        parts.append(f"お客様の発言（{'訳' if translated else '原文'}）「{utterance_ja}」")
     parts.append(order_facts(session, orders))
     for fact in unknown_facts or []:
         parts.append(f"{fact}は未確認")

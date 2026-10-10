@@ -54,7 +54,7 @@ class TableService:
             g.declared = True
             if d.get("label"):
                 g.label = d["label"]
-        await self.repo.save_session(session)
+        await self.repo.update_session(session_id, {"guests": [g.model_dump(mode="json") for g in session.guests]})
         await self.repo.audit("customer", "declare", {"declarations": declarations}, "ok", session_id=session_id)
         severe = [g for g in session.guests if g.severe and g.allergies]
         for g in severe:
@@ -67,7 +67,7 @@ class TableService:
         if g is None:
             raise KeyError(guest_id)
         g.alcohol = AlcoholCheck(adult=adult, driving=driving, at=now_iso())
-        await self.repo.save_session(session)
+        await self.repo.update_session(session_id, {"guests": [x.model_dump(mode="json") for x in session.guests]})
         await self.repo.audit("customer", "confirm_alcohol", {"guest_id": guest_id, "adult": adult, "driving": driving},
                               "ok", reason="self_declared", session_id=session_id)
         return session
@@ -111,25 +111,34 @@ class TableService:
         return check, session
 
     async def update_line(self, session_id: str, line_id: str, qty: int, actor: str = "customer") -> tuple[CartCheck | None, TableSession]:
-        session = await self.repo.session(session_id)
-        line = next((l for l in session.cart if l.line_id == line_id), None)
-        if line is None:
-            raise KeyError(line_id)
-        if qty <= 0:
-            session.cart = [l for l in session.cart if l.line_id != line_id]
-            session.confirm_token = ""
-            await self.repo.save_session(session)
-            await self.repo.audit(actor, "remove_item", {"line_id": line_id}, "ok", session_id=session_id)
-            return None, session
+        """カートの数量変更（0 で削除）。追加と同じくトランザクションで書く。"""
         store = await self.repo.store()
-        items = await self.repo.menu()
-        check = check_add(session, store, items[line.item_id], qty, line.for_guest, self.clock())
-        if check.ok:
-            line.qty = qty
-            session.confirm_token = ""
-            await self.repo.save_session(session)
-        await self.repo.audit(actor, "update_item", {"line_id": line_id, "qty": qty}, "allowed" if check.ok else "blocked",
-                              reason=",".join(check.reasons), session_id=session_id)
+        session_ref = self.repo.col("sessions").document(session_id)
+        clock = self.clock()
+
+        @firestore.async_transactional
+        async def txn(transaction):
+            session = TableSession.model_validate((await session_ref.get(transaction=transaction)).to_dict())
+            line = next((l for l in session.cart if l.line_id == line_id), None)
+            if line is None:
+                raise KeyError(line_id)
+            item_snap = await self.repo.col("menu_items").document(line.item_id).get(transaction=transaction)
+            if qty <= 0:
+                session.cart = [l for l in session.cart if l.line_id != line_id]
+                session.confirm_token = ""
+                transaction.set(session_ref, _dump(session))
+                return None, session
+            check = check_add(session, store, MenuItem.model_validate(item_snap.to_dict()), qty, line.for_guest, clock)
+            if check.ok:
+                line.qty = qty
+                session.confirm_token = ""
+                transaction.set(session_ref, _dump(session))
+            return check, session
+
+        check, session = await txn(self.repo.db.transaction(max_attempts=10))
+        await self.repo.audit(actor, "update_item" if qty > 0 else "remove_item", {"line_id": line_id, "qty": qty},
+                              "allowed" if check is None or check.ok else "blocked",
+                              reason=",".join(check.reasons) if check else "", session_id=session_id)
         return check, session
 
     async def read_back(self, session_id: str) -> dict:
@@ -151,7 +160,7 @@ class TableService:
                   "problems": [{"line_id": l.line_id, **c.to_dict()} for l, c in problems]}
         if session.cart and not problems:
             session.confirm_token = cart_token(session.cart)
-            await self.repo.save_session(session)
+            await self.repo.update_session(session_id, {"confirm_token": session.confirm_token})
             result["confirm_token"] = session.confirm_token
         return result
 
@@ -234,8 +243,8 @@ class TableService:
         orders = await self.repo.orders_for(session_id)
         phase = derive_phase(session, orders, store, self.clock())
         recs = recommend(items, session, phase, taste, category, for_guest, limit)
-        session.recommended = sorted(set(session.recommended) | {r.item_id for r in recs})
-        await self.repo.save_session(session)
+        if recs:
+            await self.repo.update_session(session_id, {"recommended": firestore.ArrayUnion([r.item_id for r in recs])})
         return [{**self.card(items[r.item_id], session), "reasons": r.to_dict(items, session.lang)["reasons"]} for r in recs]
 
     async def alternatives_for(self, session_id: str, item_id: str, for_guest: str | None) -> list[dict]:
@@ -255,23 +264,21 @@ class TableService:
         orders = await self.repo.orders_for(session_id)
         bill = make_bill(session, orders)
         if session.status == SessionStatus.dining:
-            session.status = SessionStatus.billing
-            await self.repo.save_session(session)
+            await self.repo.update_session(session_id, {"status": SessionStatus.billing.value})
         return bill.__dict__
 
     async def close(self, session_id: str, actor: str = "staff") -> None:
-        session = await self.repo.session(session_id)
-        session.status = SessionStatus.closed
-        session.closed_at = now_iso()
-        session.delete_after = (datetime.now(JST) + timedelta(days=RETENTION_DAYS)).isoformat(timespec="seconds")
-        await self.repo.save_session(session)
+        await self.repo.update_session(session_id, {
+            "status": SessionStatus.closed.value, "closed_at": now_iso(),
+            "delete_after": (datetime.now(JST) + timedelta(days=RETENTION_DAYS)).isoformat(timespec="seconds")})
         await self.repo.audit(actor, "close_table", {"session_id": session_id}, "ok", session_id=session_id)
 
     async def escalate(self, session_id: str, reason: esc_rules.Reason, utterance_ja: str = "",
-                       unknown_facts: list[str] | None = None, actor: str = "reception_agent", correlation_id: str = "") -> dict:
+                       unknown_facts: list[str] | None = None, actor: str = "reception_agent", correlation_id: str = "",
+                       translated: bool = True) -> dict:
         session = await self.repo.session(session_id)
         orders = await self.repo.orders_for(session_id)
-        summary = esc_rules.build_summary(session.table_no, reason, utterance_ja, session, orders, unknown_facts)
+        summary = esc_rules.build_summary(session.table_no, reason, utterance_ja, session, orders, unknown_facts, translated)
         data = await self.repo.create_escalation(session_id, session.table_no, reason.value, summary, reason in esc_rules.URGENT)
         await self.repo.audit(actor, "escalate", {"reason": reason.value}, "escalated", reason=summary,
                               correlation_id=correlation_id, session_id=session_id)
