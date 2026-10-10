@@ -155,6 +155,23 @@ async def emergency(sid: str, ctx: Ctx = Depends(http_ctx)) -> dict:
     return await ctx.svc.emergency(sid)
 
 
+class AskStaffIn(BaseModel):
+    item_id: str
+    for_guest: str | None = None
+
+
+@router.post("/tables/{sid}/ask_staff")
+async def ask_staff(sid: str, body: AskStaffIn, ctx: Ctx = Depends(http_ctx)) -> dict:
+    """△ / ？ の料理を店員に確認してもらう（通常の引き継ぎ）。"""
+    from app.domain.escalation import Reason
+
+    item = (await ctx.repo.menu()).get(body.item_id)
+    name = item.name.ja if item else body.item_id
+    who = f"{body.for_guest} の" if body.for_guest else ""
+    return await ctx.svc.escalate(sid, Reason.dietary_check, f"{who}{name}について、アレルギー・食事制限の確認をお願いしたい",
+                                  actor="customer_touch", translated=False)
+
+
 @router.get("/tables/{sid}/notifications")
 async def table_notifications(sid: str, ctx: Ctx = Depends(http_ctx)) -> list[dict]:
     return await ctx.repo.unacked_notifications(f"table:{sid}")

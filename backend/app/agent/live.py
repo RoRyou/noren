@@ -155,6 +155,7 @@ class VoiceSession:
     # --- 出力 -------------------------------------------------------------
     async def _consume(self, runner: Runner, adk_session_id: str, run_config: RunConfig) -> None:
         user_partial = ""
+        ai_partial = ""
         try:
             async for ev in runner.run_live(user_id=self.session_id, session_id=adk_session_id,
                                             live_request_queue=self.queue, run_config=run_config):
@@ -172,9 +173,13 @@ class VoiceSession:
                         await self.send_json({"type": "transcript", "role": "user", "text": text, "final": True})
                         await self._on_user_final(text)
                 if ev.output_transcription and ev.output_transcription.text:
-                    await self.send_json({"type": "transcript", "role": "ai", "text": ev.output_transcription.text,
-                                          "final": not ev.partial})
-                    if not ev.partial:
+                    if ev.partial:  # 途中の文字は差分で届くので、ここでつなげてから送る
+                        ai_partial += ev.output_transcription.text
+                        await self.send_json({"type": "transcript", "role": "ai", "text": ai_partial, "final": False})
+                    else:
+                        ai_partial = ""
+                        await self.send_json({"type": "transcript", "role": "ai", "text": ev.output_transcription.text,
+                                              "final": True})
                         await self.svc.repo.append_turn(self.session_id, "ai", ev.output_transcription.text)
                 for fc in ev.get_function_calls():
                     self.metrics["tool_calls"].append(fc.name)
