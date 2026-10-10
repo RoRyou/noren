@@ -6,8 +6,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
-from app.domain.models import LineStatus, Order, TableSession
+from app.domain.models import LineStatus, Order, StoreSettings, TableSession
 
 URGENT_REPEAT_S = 30
 URGENT_ESCALATE_S = 120
@@ -55,6 +56,31 @@ def last_order_notice(event_id: str, sessions: list[TableSession]) -> list[Notif
 def overdue(event_id: str, session_id: str, line_id: str, minutes: int) -> list[Notification]:
     return [Notification("staff", "overdue", {"session_id": session_id, "line_id": line_id, "minutes": minutes},
                          f"{event_id}:{line_id}")]
+
+
+def _minutes(hhmm: str) -> int:
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def time_rules(store: StoreSettings, sessions: list[TableSession], orders: list[Order], now_hhmm: str,
+               now: datetime) -> list[Notification]:
+    """時間で決まる通知（定期的な見回りで呼ぶ。dedupe_key で 1 回だけになる）。
+    - ラストオーダーの LAST_ORDER_NOTICE_MIN 分前から：食事中のテーブルに 1 回だけ知らせる
+    - 注文から OVERDUE_MIN 分たっても出ていない料理：店員に 1 回だけ知らせる"""
+    out: list[Notification] = []
+    if store.last_order and now_hhmm and 0 <= _minutes(store.last_order) - _minutes(now_hhmm) <= LAST_ORDER_NOTICE_MIN:
+        out += last_order_notice(f"lo:{now.date().isoformat()}", sessions)
+    for o in orders:
+        if o.prepay and not o.paid:  # 先払いでまだ払っていない：厨房の遅れではない
+            continue
+        waited = int((now - datetime.fromisoformat(o.created_at)).total_seconds() // 60) if o.created_at else 0
+        if waited < OVERDUE_MIN:
+            continue
+        for l in o.lines:
+            if l.status in (LineStatus.accepted, LineStatus.confirmed, LineStatus.cooking):
+                out += overdue("overdue", o.session_id, l.line_id, waited)
+    return out
 
 
 def escalation_followups(escalation_id: str, urgent: bool) -> list[tuple[int, str]]:

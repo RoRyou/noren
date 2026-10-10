@@ -295,3 +295,25 @@ def test_options_price_and_validation():
     assert check_add(s, STORE, beer, 1, None, options={"size": "large"}).ok
     lines = build_lines([CartLine(line_id="l1", item_id="d_beer", qty=2, options={"size": "large"})], MENU)
     assert lines[0].unit_price == 800
+
+
+def test_time_rules_last_order_and_overdue():
+    """ラストオーダー 15 分前から 1 回だけ知らせる。注文から 20 分たって出ていない料理は店員へ（先払いの未払いは除く）。"""
+    from datetime import datetime, timedelta
+
+    from app.domain.events import time_rules
+    from app.store.repo import JST
+
+    store = STORE  # ラストオーダー 22:30
+    s = TableSession(id="t1", store_id="s1", table_no="1", party_size=1, lang="en")
+    now = datetime(2026, 10, 11, 22, 20, tzinfo=JST)
+    line = OrderLine(line_id="l1", item_id="f_karaage", name=MENU["f_karaage"].name, qty=1, unit_price=638,
+                     status=LineStatus.confirmed)
+    old = Order(id="o1", session_id="t1", lines=[line], idempotency_key="k", created_at=(now - timedelta(minutes=25)).isoformat())
+    fresh = old.model_copy(update={"id": "o2", "created_at": (now - timedelta(minutes=5)).isoformat()})
+    unpaid = old.model_copy(update={"id": "o3", "prepay": True})
+    out = time_rules(store, [s], [old, fresh, unpaid], "22:20", now)
+    kinds = sorted((n.kind, n.target) for n in out)
+    assert kinds == [("last_order", "table:t1"), ("overdue", "staff")]
+    assert {n.dedupe_key for n in out} == {"lo:2026-10-11:t1", "overdue:l1"}
+    assert [n.kind for n in time_rules(store, [s], [], "21:00", now)] == []

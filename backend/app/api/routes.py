@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
@@ -14,6 +15,7 @@ from app.api.limits import allow_demo_creation
 from app.domain.models import LineStatus
 from app.domain.orders import TransitionError
 from app.realtime.hub import hub
+from app.store.repo import JST
 
 router = APIRouter(prefix="/api")
 
@@ -347,7 +349,8 @@ async def run_task(name: str, request: Request) -> dict:
 
 @router.post("/tasks/sweep_all")
 async def sweep_all(request: Request) -> dict:
-    """Cloud Scheduler から定期的に呼ぶ：送信待ちの outbox がある店をすべて処理する。"""
+    """Cloud Scheduler から定期的に呼ぶ：送信待ちの outbox がある店をすべて処理し、
+    営業中のテーブルがある店には時間で決まる通知（ラストオーダー前・提供が遅い）を出す。"""
     from google.cloud.firestore_v1.base_query import FieldFilter
 
     from app.api.context import client, ctx_for, dispatcher
@@ -361,4 +364,12 @@ async def sweep_all(request: Request) -> dict:
     total = 0
     for store_id in stores:
         total += await dispatcher.dispatch(ctx_for(store_id).repo)
-    return {"stores": len(stores), "dispatched": total}
+    open_stores = set()
+    async for snap in client().collection_group("sessions").where(
+            filter=FieldFilter("status", "in", ["dining", "awaiting_prepay", "billing"])).stream():
+        open_stores.add(snap.reference.parent.parent.id)
+    timed = 0
+    for store_id in open_stores:
+        c = ctx_for(store_id)
+        timed += await dispatcher.tick(c.repo, c.svc.clock(), datetime.now(JST))
+    return {"stores": len(stores), "dispatched": total, "timed_notifications": timed}

@@ -8,17 +8,19 @@ import asyncio
 import contextlib
 import html
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from app.api.context import dispatcher
+from app.api.context import ctx_for, dispatcher
 from app.api.owner import router as owner_router
 from app.api.routes import router as api_router
 from app.api.ws import router as ws_router
 from app.config import REPO_ROOT, settings
+from app.store.repo import JST
 
 logging.basicConfig(level=logging.INFO)
 FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
@@ -35,6 +37,8 @@ async def lifespan(_app: FastAPI):
             for repo in list(dispatcher._repos.values()):
                 with contextlib.suppress(Exception):
                     await dispatcher.dispatch(repo)
+                    svc = ctx_for(repo.store_id).svc
+                    await dispatcher.tick(repo, svc.clock(), datetime.now(JST))
 
     task = asyncio.create_task(sweeper())
     yield

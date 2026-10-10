@@ -32,6 +32,7 @@ export function StaffBoard() {
       if (m.type === "notification" && (m.kind === "escalation" || m.kind === "escalation_repeat" || m.kind === "escalation_all")) {
         setFlash(m.kind === "escalation_all" ? "全員：未対応の緊急があります" : "引き継ぎがあります");
       }
+      if (m.type === "notification" && m.kind === "overdue") setFlash(`${m.payload.minutes} 分以上出ていない料理があります`);
       void load();
     };
     return () => es.close();
@@ -46,6 +47,8 @@ export function StaffBoard() {
   const tableNo = (sid: string) => board.tables.find((t: any) => t.id === sid)?.table_no ?? "?";
   const lines = board.orders.flatMap((o: any) => o.lines.map((l: any) => ({ ...l, order_id: o.id, session_id: o.session_id, unpaid: o.prepay && !o.paid })));
   const unpaid = board.orders.filter((o: any) => o.prepay && !o.paid);
+  // 注文から時間がたっても出ていない料理（見回りが通知を出す）
+  const late = new Map<string, number>(board.notifications.filter((n: any) => n.kind === "overdue").map((n: any) => [n.payload.line_id, n.payload.minutes]));
 
   return (
     <div className="staff">
@@ -86,6 +89,7 @@ export function StaffBoard() {
               <b>{tableNo(l.session_id)}番</b> {l.name.ja} ×{l.qty}
               {l.for_guest && <span className="small"> {l.for_guest}</span>}
               {l.is_alcohol && <span className="tag">お酒・年齢を目視</span>}
+              {late.has(l.line_id) && <span className="tag late">{late.get(l.line_id)} 分経過</span>}
               <span className="status">{STATUS_JA[l.status]}</span>
               <div className="row">
                 {l.unpaid && <span className="tag">未払い</span>}

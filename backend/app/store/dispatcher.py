@@ -51,6 +51,19 @@ class Dispatcher:
                     log.exception("dispatch failed: %s", ev.get("id"))
             return count
 
+    async def tick(self, repo: Repo, now_hhmm: str, now) -> int:
+        """時間で決まる通知（ラストオーダー前・提供が遅い）を出す。見回りのたびに呼ぶ。"""
+        store = await repo.store()
+        sessions = await repo.open_sessions()
+        orders = await repo.open_orders()
+        count = 0
+        for n in rules.time_rules(store, sessions, orders, now_hhmm, now):
+            data, created = await repo.put_notification(n.target, n.kind, n.payload, n.dedupe_key)
+            if created:
+                self.hub.publish(repo.store_id, n.target, {"type": "notification", **data})
+                count += 1
+        return count
+
     async def _notifications_for(self, repo: Repo, ev: dict) -> list[rules.Notification]:
         kind, p, eid = ev["kind"], ev["payload"], ev["id"]
         if kind == "order_accepted":
