@@ -19,12 +19,13 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.agent.live import VoiceSession
 from app.api.context import client, ws_ctx
 from app.api.limits import VoiceBudget
+from app.config import settings
 from app.realtime.hub import hub
 
 log = logging.getLogger("noren.ws")
 router = APIRouter()
 
-MAX_VOICE_SESSIONS = 20  # 同時に開ける音声会話の上限（費用の保護）
+MAX_VOICE_SESSIONS = settings.live_max_concurrent_sessions  # 同時に開ける音声会話の上限（費用の保護）
 _active_voice = 0
 
 

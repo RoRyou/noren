@@ -53,8 +53,7 @@ class Settings(BaseSettings):
     # 訪問者（デモ店）ごとの音声の上限（1 日あたりの分）。評価をまとめて回すときは環境変数で上げる
     per_visitor_voice_minutes: int = 15
 
-    # コスト対策：無通話の Live セッションは閉じ、同時セッション数に上限を設ける
-    live_idle_timeout_s: int = 120
+    # コスト対策：同時に開ける音声の会話の上限（話さなければ 20 秒で閉じる：agent/live.py の IDLE_CLOSE_S）
     live_max_concurrent_sessions: int = 20
 
 
