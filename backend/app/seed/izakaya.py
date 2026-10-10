@@ -80,6 +80,30 @@ RAW: list[tuple] = [
 FRYER_SHARED = ["f_karaage", "f_ebi_ten", "f_fries", "f_agedashi"]  # 同じ油で揚げる
 
 
+# 料理の一般的な説明（訪日客向け。店の事実は書かない）。検索でも使う（「chicken skewers」→ 焼き鳥）
+DESCRIPTIONS: dict[str, Localized] = {
+    "d_beer": L("樽から注ぐ生ビール", "Japanese lager on tap"),
+    "d_highball": L("ウイスキーの炭酸割り", "Whisky and soda"),
+    "d_sake": L("米から造る日本の酒。辛口", "Japanese rice wine, dry"),
+    "d_yuzu_sour": L("焼酎を柚子の果汁と炭酸で割ったもの", "Shochu with yuzu citrus juice and soda"),
+    "d_yuzu_soda": L("柚子の炭酸飲料（アルコールなし）", "Yuzu citrus soda, no alcohol"),
+    "s_edamame": L("塩ゆでした若い大豆", "Boiled young soybeans with salt"),
+    "s_hiyayakko": L("冷たい豆腐に薬味と醤油", "Cold tofu with toppings and soy sauce"),
+    "s_cucumber": L("たたいたきゅうりの和え物", "Smashed cucumber with a light dressing"),
+    "s_dashimaki": L("だしを入れたふんわりした卵焼き", "Fluffy rolled omelette made with soup stock"),
+    "f_karaage": L("日本の鶏の唐揚げ", "Japanese-style fried chicken"),
+    "f_ebi_ten": L("海老を薄い衣で揚げたもの", "Shrimp fried in a light batter"),
+    "f_agedashi": L("揚げた豆腐に温かいつゆ", "Fried tofu in a warm soy broth"),
+    "g_yakitori": L("鶏肉の串焼き（塩味）", "Grilled chicken skewers with salt"),
+    "g_buta_kimchi": L("豚肉とキムチの炒め物（辛い）", "Pork stir-fried with spicy kimchi"),
+    "g_mapo": L("豆腐の辛い炒め煮", "Tofu in a spicy chili sauce"),
+    "g_maguro": L("生のまぐろの切り身", "Sliced raw tuna"),
+    "r_ochazuke": L("ご飯に鮭をのせ、お茶をかけたもの", "Rice with salmon, topped with hot tea"),
+    "r_onigiri": L("醤油を塗って焼いたおにぎり", "Rice ball grilled with soy sauce"),
+    "ds_matcha_ice": L("抹茶のアイスクリーム", "Green tea ice cream"),
+}
+
+
 def build_menu() -> dict[str, MenuItem]:
     items: dict[str, MenuItem] = {}
     for item_id, name, price, category, ingredients, extra in RAW:
@@ -89,7 +113,7 @@ def build_menu() -> dict[str, MenuItem]:
             allergens=sorted(conv.allergens), maybe_allergens=sorted(conv.maybe_allergens), diet_tags=sorted(conv.tags),
             allergen_status=AllergenStatus.confirmed if conv.complete else AllergenStatus.unconfirmed,
             allergen_confirmed_by=CONFIRMED_BY if conv.complete else "", allergen_confirmed_at=CONFIRMED_AT if conv.complete else "",
-            photo_url=f"/media/menu/{item_id}.jpg", published=True, **extra,
+            photo_url=f"/media/menu/{item_id}.jpg", published=True, **{"description": DESCRIPTIONS.get(item_id), **extra},
         )
     # 同じフライヤー：ほかの揚げ物のアレルゲン（確定・可能性）を混入の可能性として持たせる
     for item_id in FRYER_SHARED:

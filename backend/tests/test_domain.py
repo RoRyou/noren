@@ -317,3 +317,13 @@ def test_time_rules_last_order_and_overdue():
     assert kinds == [("last_order", "table:t1"), ("overdue", "staff")]
     assert {n.dedupe_key for n in out} == {"lo:2026-10-11:t1", "overdue:l1"}
     assert [n.kind for n in time_rules(store, [s], [], "21:00", now)] == []
+
+
+def test_menu_search_matches_words_and_ranks():
+    """「chicken skewers」でも焼き鳥が見つかり、唐揚げより上に来る。日本語は部分一致。"""
+    from app.services.table import match_score
+
+    assert match_score(MENU["g_yakitori"], "chicken skewers") > match_score(MENU["f_karaage"], "chicken skewers") > 0
+    assert match_score(MENU["g_mapo"], "mapo tofu") == 100
+    assert match_score(MENU["g_buta_kimchi"], "辛い") == 100
+    assert match_score(MENU["ds_matcha_ice"], "pizza") == 0

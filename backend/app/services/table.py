@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import uuid
 from datetime import datetime, timedelta
 
@@ -26,6 +28,28 @@ def now_hhmm() -> str:
 
 def _dump(m) -> dict:
     return m.model_dump(by_alias=True, mode="json")
+
+
+STOPWORDS = {"the", "a", "an", "of", "and", "with", "some", "any", "do", "you", "have", "is", "there", "please", "menu"}
+
+
+def _tokens(text: str) -> list[str]:
+    """英語などの単語に分ける（複数形の s は取る）。日本語・中国語・韓国語は分けずにそのまま使う。"""
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return [w[:-1] if len(w) > 3 and w.endswith("s") else w for w in words if w not in STOPWORDS]
+
+
+def match_score(item: MenuItem, query: str) -> int:
+    """料理名・説明・食材に、検索語がどれだけ当たるか（0 は当たらない）。「chicken skewers」でも焼き鳥が見つかる。"""
+    texts = [item.name.ja, item.name.en, item.name.zh_hans, item.name.zh_hant, item.name.ko, " ".join(item.ingredients)]
+    if item.description:
+        texts += [item.description.ja, item.description.en]
+    hay = " ".join(t for t in texts if t).lower()
+    q = query.lower().strip()
+    if q and q in hay:
+        return 100  # そのまま含まれる（日本語の料理名など）
+    words = set(_tokens(hay))
+    return sum(1 for w in _tokens(q) if len(w) >= 3 and w in words)
 
 
 class TableService:
@@ -210,7 +234,7 @@ class TableService:
                        taste: list[str] | None = None) -> list[dict]:
         session = await self.repo.session(session_id)
         items = await self.repo.menu()
-        out = []
+        scored = []
         for item in items.values():
             if not item.published:
                 continue
@@ -218,13 +242,11 @@ class TableService:
                 continue
             if taste and not set(taste) & set(item.taste_tags):
                 continue
-            if query:
-                q = query.lower()
-                names = [item.name.ja, item.name.en, item.name.zh_hans, item.name.zh_hant, item.name.ko]
-                if not any(q in n.lower() for n in names if n) and q not in " ".join(item.ingredients):
-                    continue
-            out.append(self.card(item, session))
-        return out
+            score = match_score(item, query) if query else 1
+            if score:
+                scored.append((score, item))
+        scored.sort(key=lambda x: -x[0])  # よく合うものから
+        return [self.card(item, session) for _, item in scored]
 
     def card(self, item: MenuItem, session: TableSession) -> dict:
         """料理カード。お客様ごとの判定（○✕△？）を必ず付ける。"""
