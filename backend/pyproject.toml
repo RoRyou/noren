@@ -1,7 +1,7 @@
 [project]
 name = "noren-backend"
 version = "0.1.0"
-description = "NOREN: multilingual AI reception agent for small restaurants"
+description = "NOREN：テーブルの AI と話しているうちに食べたいものが決まる、飲食店の接客エージェント"
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "fastapi>=0.115",

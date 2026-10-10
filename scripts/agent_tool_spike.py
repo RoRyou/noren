@@ -1,21 +1,21 @@
-"""Spike: can the live (voice) root agent delegate to text sub-agents under ADK run_live?
+"""検証：ADK run_live で、音声のルートエージェントからテキストのサブエージェントに委譲できるか。
 
-Compares, on the same spoken question, how the root `gemini-3.8-live` agent reaches menu data:
-  direct       root calls a deterministic function tool                       (baseline)
-  agent_tool   root calls AgentTool(menu_agent); menu_agent calls the tool    (2 text LLM calls)
-  single_turn  menu_agent attached as sub_agents with mode='single_turn'      (ADK 2.x recommended)
-  agent_1call  root calls AgentTool(menu_agent); candidates are fetched by code
-               and put in the prompt, so the sub-agent is a single LLM call
-  llm_tool     same single LLM call, but made directly with google-genai inside a plain
-               function tool (no ADK sub-runner), to isolate the AgentTool overhead
+同じ音声の質問で、ルートの `gemini-3.8-live` エージェントがメニュー情報にたどり着く方法を比べる：
+  direct       ルートが確定的な関数ツールを直接呼ぶ                          （基準）
+  agent_tool   ルートが AgentTool(menu_agent) を呼び、menu_agent がツールを呼ぶ（テキスト LLM 2 回）
+  single_turn  menu_agent を mode='single_turn' の sub_agents として付ける     （ADK 2.x の推奨）
+  agent_1call  ルートが AgentTool(menu_agent) を呼ぶ。候補はコードで取得してプロンプトに入れるため、
+               サブエージェントは LLM 1 回
+  llm_tool     同じ LLM 1 回を、通常の関数ツールの中から google-genai で直接呼ぶ
+               （ADK のサブランナーなし。AgentTool のオーバーヘッドを切り分けるため）
 
-Per run it reports latency from end of user speech to first audio, how long the root tool call
-took (= sub-agent time), whether the sub-agent actually ran, silent turns and duplicate calls.
+実行ごとに、発話の終わりから最初の音声までの遅延、ルートのツール呼び出しにかかった時間
+（= サブエージェントの時間）、サブエージェントが実際に動いたか、無音ターンと重複呼び出しを記録する。
 
-Usage (from repo root):
+使い方（リポジトリのルートから）：
   cd backend && uv run python ../scripts/agent_tool_spike.py --repeat 3
   cd backend && uv run python ../scripts/agent_tool_spike.py --variant agent_tool --query ja
-Outputs: logs/agent_tool_spike/<timestamp>/report.json
+出力：logs/agent_tool_spike/<タイムスタンプ>/report.json
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ from google.genai import types  # noqa: E402
 from app.config import settings  # noqa: E402
 from live_smoke import IN_RATE, CHUNK_MS, synthesize_pcm16k  # noqa: E402
 
-SUB_MODEL = "gemini-2.5-flash-lite"  # only fast text model served regionally (us-central1)
+SUB_MODEL = "gemini-2.5-flash-lite"  # リージョン（us-central1）で使える唯一の高速テキストモデル
 SUB_LOCATION = "us-central1"
 
 MENU = [
@@ -152,11 +152,11 @@ class RunResult:
     query: str
     ok: bool = False
     error: str = ""
-    first_audio_ms: float | None = None  # end of speech -> first audio chunk (may be a filler)
-    answer_audio_ms: float | None = None  # end of speech -> first audio after the tool response
-    tool_ms: float | None = None  # root function_call event -> function_response event
+    first_audio_ms: float | None = None  # 発話の終わり → 最初の音声（つなぎの言葉の場合あり）
+    answer_audio_ms: float | None = None  # 発話の終わり → ツール応答後の最初の音声
+    tool_ms: float | None = None  # ルートの function_call → function_response
     root_calls: list[str] = field(default_factory=list)
-    sub_tool_calls: int = 0  # search_menu calls made inside the sub-agent
+    sub_tool_calls: int = 0  # サブエージェント内での search_menu 呼び出し回数
     duplicate_calls: bool = False
     silent_turn: bool = False
     audio_seconds: float = 0.0

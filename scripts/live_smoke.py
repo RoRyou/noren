@@ -1,21 +1,20 @@
-"""Smoke test for Gemini Live (Japanese / English, tools, latency).
+"""Gemini Live の疎通テスト（日本語・英語、ツール呼び出し、遅延）。
 
-Headless: input speech is synthesized with macOS `say` (Kyoko = ja, Samantha = en),
-converted to 16 kHz mono PCM with `afconvert`, and streamed at real-time pace.
-Nothing is recorded from a microphone.
+ヘッドレス：入力音声は macOS の `say`（Kyoko = 日本語、Samantha = 英語）で合成し、
+`afconvert` で 16 kHz モノラル PCM に変換して実時間のペースで送る。マイクは使わない。
 
-Per case it reports:
-  - latency from end of user speech (or text send) to the first audio chunk
-  - seconds of audio returned, and a "silent turn" flag (transcript but < 0.3 s audio,
-    a reported gemini-3.8-live issue)
-  - input / output transcription
-  - tool calls (name, args, id) and whether the same call was repeated
-  - usage_metadata token counts
+ケースごとに次を記録する：
+  - 発話（またはテキスト送信）の終わりから最初の音声チャンクまでの遅延
+  - 返ってきた音声の秒数と「無音ターン」フラグ（文字起こしはあるが音声が 0.3 秒未満。
+    gemini-3.8-live で報告されている不具合）
+  - 入力・出力の文字起こし
+  - ツール呼び出し（名前、引数、ID）と、同じ呼び出しの重複の有無
+  - usage_metadata のトークン数
 
-Usage (from repo root):
-  cd backend && uv run python ../scripts/live_smoke.py            # all cases
+使い方（リポジトリのルートから）：
+  cd backend && uv run python ../scripts/live_smoke.py            # 全ケース
   cd backend && uv run python ../scripts/live_smoke.py --case audio_ja
-Outputs: logs/live_smoke/<timestamp>/{report.json, <case>.wav}
+出力：logs/live_smoke/<タイムスタンプ>/{report.json, <ケース>.wav}
 """
 
 from __future__ import annotations
@@ -160,8 +159,8 @@ async def run_case(client: genai.Client, name: str, spec: dict, out_dir: Path) -
                                     res.first_audio_latency_ms = round((time.monotonic() - t_input_end) * 1000)
                                 audio_out.extend(part.inline_data.data)
                     if sc.turn_complete:
-                        # A tool call ends one receive() loop without a spoken answer;
-                        # keep listening until a turn that actually produced audio/text.
+                        # ツール呼び出しだけで receive() のループが終わることがあるため、
+                        # 実際に音声か文字が返ってきたターンまで待ち続ける。
                         if audio_out or res.output_transcript:
                             done = True
                         break
@@ -183,7 +182,7 @@ async def run_case(client: genai.Client, name: str, spec: dict, out_dir: Path) -
                 await asyncio.sleep(CHUNK_MS / 1000)
             t_input_end = time.monotonic()
             silence = b"\x00" * step
-            for _ in range(1500 // CHUNK_MS):  # 1.5 s trailing silence for server VAD
+            for _ in range(1500 // CHUNK_MS):  # サーバー側 VAD のために末尾に 1.5 秒の無音を送る
                 await session.send_realtime_input(audio=types.Blob(data=silence, mime_type=mime))
                 await asyncio.sleep(CHUNK_MS / 1000)
 
@@ -221,7 +220,7 @@ async def main() -> int:
             label = name if args.repeat == 1 else f"{name}_{n + 1}"
             try:
                 r = await run_case(client, label, CASES[name], out_dir)
-            except Exception as e:  # report and continue with the next case
+            except Exception as e:  # 記録して次のケースへ進む
                 r = CaseResult(case=label, error=f"{type(e).__name__}: {e}")
             results.append(r)
             print(json.dumps(asdict(r), ensure_ascii=False))

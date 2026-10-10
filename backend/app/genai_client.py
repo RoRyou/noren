@@ -1,10 +1,10 @@
-"""Single place that decides how we talk to Gemini.
+"""Gemini への接続方法をここ 1 か所で決める。
 
-- Agent Platform (Vertex): billed to the GCP billing account. Auth = ADC.
-  Locally, ADC lives in a dedicated file (GOOGLE_APPLICATION_CREDENTIALS) so it
-  never mixes with other gcloud logins on the machine. On Cloud Run, the service
-  account is used and the variable is not set.
-- Gemini API (AI Studio key): fallback only.
+- Agent Platform（Vertex AI）：GCP の請求先アカウントに課金。認証は ADC。
+  ローカルでは ADC を専用ファイル（GOOGLE_APPLICATION_CREDENTIALS）に置き、
+  マシン上の他の gcloud ログインと混ざらないようにする。Cloud Run では
+  サービスアカウントを使い、この変数は設定しない。
+- Gemini API（AI Studio の API キー）：予備のみ。
 """
 
 import os

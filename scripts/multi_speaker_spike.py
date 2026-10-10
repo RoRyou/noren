@@ -1,18 +1,18 @@
-"""Spike: multi-person tables on gemini-3.8-live (speaker diarization / proactive audio / connect time).
+"""検証：gemini-3.8-live で複数人のテーブルに対応できるか（話者分離 / proactive audio / 接続時間）。
 
-Questions:
-  1. Does input transcription with `diarization=True` return distinct `speaker_label`s
-     when two people order one after another?
-  2. With `proactivity.proactive_audio=True`, does the model stay silent when guests
-     talk to each other (not to the tablet), and still answer when addressed?
-  3. How long does `live.connect` take (latency of "tap to talk")?
+確かめること：
+  1. 入力の文字起こしで `diarization=True` にすると、2 人が続けて注文したときに
+     別々の `speaker_label` が返るか
+  2. `proactivity.proactive_audio=True` のとき、お客様同士の会話（タブレットへの発話ではない）
+     には黙り、話しかけられたときは答えるか
+  3. `live.connect` にどれくらいかかるか（「タップして話す」までの待ち時間）
 
-Input speech is synthesized with macOS `say` (two different voices per language).
+入力音声は macOS の `say` で合成する（言語ごとに 2 種類の声）。
 
-Usage (from repo root):
+使い方（リポジトリのルートから）：
   cd backend && uv run python ../scripts/multi_speaker_spike.py
   cd backend && uv run python ../scripts/multi_speaker_spike.py --case side_chat_en_on --repeat 3
-Outputs: logs/multi_speaker_spike/<timestamp>/report.json
+出力：logs/multi_speaker_spike/<タイムスタンプ>/report.json
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ SYSTEM_INSTRUCTION = (
 )
 VOCAB = ["生ビール", "枝豆", "だし巻き玉子", "冷奴", "唐揚げ", "edamame", "draft beer"]
 
-# (voice, text) segments, spoken back to back with a short gap
+# (声, テキスト) の区間。短い間を空けて続けて話す
 CASES: dict[str, dict] = {
     "diarize_en": {
         "segments": [(EN_A, "I'd like a draft beer, please."), (EN_B, "And edamame for me, please.")],
@@ -92,12 +92,12 @@ class Result:
     first_audio_ms: float | None = None
     audio_seconds: float = 0.0
     responded: bool = False
-    speaker_segments: list[list[str]] = field(default_factory=list)  # [label, text]
+    speaker_segments: list[list[str]] = field(default_factory=list)  # [話者ラベル, テキスト]
     distinct_speakers: int = 0
     input_transcript: str = ""
     output_transcript: str = ""
     tool_calls: list[dict] = field(default_factory=list)
-    timeline: list[str] = field(default_factory=list)  # "t_ms kind text" relative to connect
+    timeline: list[str] = field(default_factory=list)  # 「経過ms 種類 テキスト」（接続時点からの相対時間）
 
 
 def build_config(spec: dict) -> types.LiveConnectConfig:
@@ -193,7 +193,7 @@ async def run_case(client: genai.Client, name: str, spec: dict) -> Result:
                 await send(pcm)
             t_end = time.monotonic()
             mark("input_end")
-            # keep streaming silence while waiting, like an open microphone
+            # 待つ間も、開いたマイクのように無音を送り続ける
             deadline = t_end + WAIT_FOR_REPLY_S
             while time.monotonic() < deadline:
                 await send(silence)

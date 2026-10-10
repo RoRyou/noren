@@ -1,4 +1,4 @@
-"""Settings loaded from environment (.env locally, env vars on Cloud Run)."""
+"""環境変数から読み込む設定（ローカルは .env、Cloud Run は環境変数）。"""
 
 from pathlib import Path
 
@@ -18,11 +18,11 @@ class Settings(BaseSettings):
     google_application_credentials: str = ""
 
     live_model: str = "gemini-3.8-live"
-    # gemini-3.8-live on Agent Platform is only served from us / eu (no Tokyo)
+    # Agent Platform の gemini-3.8-live は us / eu リージョンのみ（東京なし）
     live_location: str = "us-central1"
     live_voice: str = "Kore"
 
-    # Cost guards: idle live sessions are closed, concurrent sessions are capped
+    # コスト対策：無通話の Live セッションは閉じ、同時セッション数に上限を設ける
     live_idle_timeout_s: int = 120
     live_max_concurrent_sessions: int = 20
 

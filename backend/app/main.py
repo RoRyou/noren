@@ -1,7 +1,7 @@
-"""NOREN backend entrypoint.
+"""NOREN バックエンドのエントリポイント。
 
-One Cloud Run service: REST + WebSocket APIs under /api and /ws, and the built
-frontend (Vite) served as static files for every other path.
+Cloud Run の 1 サービスで、/api と /ws に REST・WebSocket API を置き、
+それ以外のパスではビルド済みのフロントエンド（Vite）を静的ファイルとして返す。
 """
 
 from pathlib import Path
@@ -27,7 +27,7 @@ if FRONTEND_DIST.exists():
 
     @app.get("/{path:path}")
     async def spa(path: str) -> FileResponse:
-        # Client-side routing: /t/<token> (customer), /staff, /owner all load index.html
+        # クライアント側ルーティング：/t/<token>（お客様）、/staff、/owner はすべて index.html を返す
         candidate = FRONTEND_DIST / path
         if path and candidate.is_file():
             return FileResponse(candidate)
