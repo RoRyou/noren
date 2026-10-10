@@ -150,7 +150,11 @@ class Run:
         async with websockets.connect(url, max_size=None) as ws:
             recv = asyncio.create_task(self.receiver(ws))
             for _ in range(MAX_TURNS):
-                line = await guest_says(self.s, self.history)
+                try:
+                    line = await asyncio.wait_for(guest_says(self.s, self.history), 30)
+                except asyncio.TimeoutError:
+                    self.history.append({"role": "screen", "text": "(お客様役の AI が 30 秒応答せず終了)"})
+                    break
                 if line.startswith("[END]") or not line:
                     break
                 self.history.append({"role": "guest", "text": line})
@@ -159,7 +163,9 @@ class Run:
                 self.ui += turn["events"]
                 self.history.append({"role": "ai", "text": turn["text"]})
                 taps = await self.tap(turn["events"])
-                while taps:  # 押した結果に AI が続けて話す
+                loops = 0
+                while taps and loops < 4:  # 押した結果に AI が続けて話す（無限に続かないよう 4 回まで）
+                    loops += 1
                     self.history.append({"role": "screen", "text": "; ".join(taps)})
                     turn = await self.ai_turn(time.monotonic(), timeout=20)
                     self.ui += turn["events"]
