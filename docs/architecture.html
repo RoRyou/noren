@@ -1,0 +1,66 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#fff;font-family:"Hiragino Sans","Noto Sans JP",sans-serif;color:#1d2733}
+#c{position:relative;width:1500px;height:880px;padding:0}
+.col{position:absolute;top:60px;bottom:20px;border-radius:18px;padding:14px}
+.col h2{margin:0 0 10px;font-size:17px;letter-spacing:.05em}
+#c1{left:20px;width:260px;background:#f6f1e7;border:2px solid #e2dccf}
+#c2{left:320px;width:780px;background:#eef2f8;border:2px solid #c9d6e8}
+#c3{left:1140px;width:340px;background:#f1f7f2;border:2px solid #cfe3d4}
+.box{position:absolute;background:#fff;border:2px solid #1f3a5f;border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.45;box-shadow:0 2px 6px #0001}
+.box b{font-size:15px;display:block;margin-bottom:2px}
+.box.ai{border-color:#c2410c}.box.rule{border-color:#2e7d4f;background:#f4fbf6}.box.store{border-color:#6b5fa5}
+.tool{display:inline-block;margin:3px 3px 0 0;padding:3px 8px;border-radius:999px;background:#fdf0e6;color:#9a3412;font-size:12.5px}
+.tool.must{background:#e6f4ea;color:#1e6b3c;font-weight:600}
+h1{position:absolute;left:24px;top:8px;margin:0;font-size:22px;color:#1f3a5f}
+.legend{position:absolute;right:24px;top:16px;font-size:13px;color:#555}
+svg{position:absolute;left:0;top:0;width:1500px;height:880px;pointer-events:none}
+.lbl{font-size:12.5px;fill:#1f3a5f}
+</style></head><body><div id="c">
+<h1>NOREN のしくみ</h1>
+<div class="legend"><span style="color:#c2410c">■</span> AI エージェント　<span style="color:#2e7d4f">■</span> コードのルール（AI に任せない）　<span style="color:#6b5fa5">■</span> データ</div>
+<div class="col" id="c1"><h2>お店の中</h2></div>
+<div class="col" id="c2"><h2>Cloud Run（FastAPI + Agent Development Kit）</h2></div>
+<div class="col" id="c3"><h2>Google Cloud</h2></div>
+
+<div class="box" id="tablet" style="left:40px;top:130px;width:220px"><b>お客様のタブレット</b>左：AI との会話（音声・文字）<br>右：写真付きメニュー・カート<br>タッチだけでも注文できる</div>
+<div class="box" id="staff" style="left:40px;top:430px;width:220px"><b>店員の端末</b>料理ごとの注文ボード<br>引き継ぎ（理由と要約つき）<br>「出汁が切れた」と一言</div>
+<div class="box" id="owner" style="left:40px;top:640px;width:220px"><b>店主の画面</b>メニュー写真の取り込み<br>AI に任せる範囲（ポリシー）</div>
+
+<div class="box ai" id="reception" style="left:345px;top:110px;width:330px"><b>接客エージェント（音声）</b>雑談しながらおすすめ → 注文まで<br>タップで開始・話さなければ 20 秒で終了<br>専門機能を並列に呼び、答えをまとめる
+<div><span class="tool">メニュー</span><span class="tool">おすすめ</span><span class="tool">店舗知識</span><span class="tool">注文・会計</span><span class="tool">店員へ引き継ぎ</span><span class="tool must">アレルギー判定 ○✕△？</span></div></div>
+<div class="box rule" id="rules" style="left:720px;top:110px;width:355px"><b>共通チェック（コード）</b>会話・文字・タッチのどこからでも同じ判定<br>・食事制限（お客様ごと ○✕△？、混入の可能性）<br>・お酒：20 歳以上・運転しない（人ごと）<br>・どなたの分か（「私」を推測しない）<br>・復唱の確認トークン・在庫・ラストオーダー</div>
+<div class="box rule" id="events" style="left:720px;top:380px;width:355px"><b>イベントエンジン（outbox）</b>品切れ・厨房のお断り・待ち時間・未対応の引き継ぎ<br>→ 知らせるかはルールで決め、画面に通知（マイクは開かない）</div>
+<div class="box ai" id="storeagent" style="left:345px;top:430px;width:330px"><b>店舗エージェント</b><span style="font-size:12px;color:#666">gemini-3.8-flash</span><br>店員の一言 → 変更案<br>影響する料理はコードが食材から探す<br>2 品以上の品切れは店員が確定</div>
+<div class="box ai" id="menuagent" style="left:345px;top:640px;width:330px"><b>メニュー取り込みエージェント</b><span style="font-size:12px;color:#666">gemini-3.8-flash</span><br>写真から書き写し（推測しない）<br>店主に食材を質問 → コードがアレルゲン 29 品目に換算<br>4 言語に翻訳（確認用の逆翻訳つき）</div>
+<div class="box rule" id="audit" style="left:720px;top:640px;width:355px"><b>監査ログ</b>共通チェックとエージェントの判断を記録：<br>許可・ブロック・引き継ぎと理由<br>（会話ごとの関連 ID・規則のバージョン）</div>
+
+<div class="box" id="live" style="left:1160px;top:110px;width:300px"><b>Gemini Live API</b>gemini-3.8-live（音声の会話）</div>
+<div class="box" id="flash" style="left:1160px;top:250px;width:300px"><b>Gemini API</b>gemini-3.8-flash<br>店舗エージェント・メニュー取り込みが使う</div>
+<div class="box store" id="fs" style="left:1160px;top:400px;width:300px"><b>Firestore</b>店・メニュー・テーブル・注文（料理ごとの状態）<br>通知・監査ログ（トランザクション + outbox）</div>
+<div class="box" id="tasks" style="left:1160px;top:600px;width:300px"><b>Cloud Tasks / Scheduler</b>時間指定の再通知・見回り</div>
+<svg id="s"><defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#1f3a5f"/></marker></defs></svg>
+</div>
+<script>
+const s=document.getElementById("s");
+function line(pts,label,lx,ly,opt={}){
+ const p=document.createElementNS("http://www.w3.org/2000/svg","polyline");
+ p.setAttribute("points",pts.map(q=>q.join(",")).join(" "));
+ p.setAttribute("stroke",opt.color||"#1f3a5f");p.setAttribute("stroke-width","2.2");p.setAttribute("fill","none");
+ p.setAttribute("stroke-linejoin","round");p.setAttribute("marker-end","url(#a)");if(opt.both)p.setAttribute("marker-start","url(#a)");
+ s.appendChild(p);
+ if(label){const t=document.createElementNS("http://www.w3.org/2000/svg","text");t.setAttribute("x",lx);t.setAttribute("y",ly);t.setAttribute("text-anchor","middle");t.setAttribute("class","lbl");t.textContent=label;s.appendChild(t);}
+}
+line([[290,175],[343,175]],"会話",316,166,{both:true});
+line([[160,244],[160,300],[760,300],[760,262]],"タッチ操作（REST）",470,293);
+line([[705,190],[718,190]]);
+line([[600,108],[600,98],[1320,98],[1320,108]],"音声（Gemini Live）",960,92,{both:true});
+line([[1105,200],[1125,200],[1125,415],[1158,415]]);
+line([[1158,445],[1105,445]]);
+line([[720,398],[312,398],[312,215],[290,215]],"通知（マイクは開かない）",520,391);
+line([[720,412],[300,412],[300,470],[290,470]],"SSE",520,426);
+line([[290,500],[343,500]],"一言",316,492);
+line([[705,515],[716,515],[716,580],[1140,580],[1140,478],[1158,478]],"確定した変更",920,573);
+line([[290,690],[343,690]],"写真",316,682);
+line([[705,700],[716,700],[716,810],[1150,810],[1150,500],[1158,500]],"下書き・換算結果",920,803);
+line([[1105,470],[1116,470],[1116,630],[1158,630]]);
+</script></body></html>
