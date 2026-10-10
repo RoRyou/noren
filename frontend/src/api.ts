@@ -65,7 +65,7 @@ export const api = {
   alcohol: (sid: string, guest_id: string, adult: boolean, driving: boolean) =>
     call<any>("POST", `/api/tables/${sid}/alcohol`, { guest_id, adult, driving }),
   menu: (sid: string, category?: string) => call<Card[]>("GET", `/api/tables/${sid}/menu${category ? `?category=${category}` : ""}`),
-  recommend: (sid: string) => call<Card[]>("GET", `/api/tables/${sid}/recommend`),
+  recommend: (sid: string, category?: string) => call<Card[]>("GET", `/api/tables/${sid}/recommend${category ? `?category=${category}` : ""}`),
   addCart: (sid: string, item_id: string, qty: number, for_guest: string | null, for_guests?: string[], options?: Record<string, string>) =>
     call<{ check: Check; checks?: Check[]; cart: CartLine[]; alternatives?: Card[] }>("POST", `/api/tables/${sid}/cart`, { item_id, qty, for_guest, for_guests, options: options ?? {} }),
   updateCart: (sid: string, line_id: string, qty: number) => call<any>("PATCH", `/api/tables/${sid}/cart/${line_id}`, { qty }),

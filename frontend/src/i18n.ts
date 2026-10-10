@@ -100,6 +100,7 @@ const dict = {
     "○ 可以吃　✕ 含有　△ 可能混入　？ 未確認",
     "○ 먹을 수 있음　✕ 포함　△ 혼입 가능성　？ 미확인",
   ),
+  drinkSuggest: T("お飲み物はいかがですか？", "Something to drink?", "要来点饮料吗？", "要來點飲料嗎？", "음료는 어떠세요?"),
   mayContact: T("混入の可能性", "may have contact", "可能混入", "可能混入", "혼입 가능성"),
   noteSoldOut: T("{name}が品切れになりました", "{name} just sold out", "{name}已售罄", "{name}已售罄", "{name}이(가) 품절되었어요"),
   noteRejected: T("{name}は厨房でお受けできませんでした", "The kitchen couldn't take {name}", "厨房无法提供{name}", "廚房無法提供{name}", "주방에서 {name}을(를) 준비할 수 없어요"),

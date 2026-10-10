@@ -288,6 +288,17 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
   const guestLabel = (id: string | null) => guests.find((g) => g.id === id)?.label ?? "";
   const cartTotal = cart.reduce((s, l) => s + (cards[l.item_id]?.price ?? 0) * l.qty, 0);
 
+  // カートの交差推薦：料理はあるのに飲み物がないとき、全員が ○ の飲み物を 1 つ提案する
+  const [drink, setDrink] = useState<Card | null>(null);
+  const hasDrink = cart.some((l) => cards[l.item_id]?.category === "drink");
+  useEffect(() => {
+    if (cart.length === 0 || hasDrink) {
+      setDrink(null);
+      return;
+    }
+    void api.recommend(sid, "drink").then((rs) => setDrink(rs.find((r) => Object.values(r.marks).every((m) => m.mark === "○")) ?? null));
+  }, [cart.length, hasDrink]);
+
   return (
     <div className="table-screen">
       <section className="left">
@@ -392,6 +403,14 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
             </div>
           )}
         </div>
+        {drink && (
+          <div className="cross-sell">
+            <span>{t(lang, "drinkSuggest")}</span>
+            <b>{drink.name}</b>
+            {drink.reasons?.[0] && <span className="small">{drink.reasons[0]}</span>}
+            <button onClick={() => startAdd(drink.item_id)}>{t(lang, "add")}</button>
+          </div>
+        )}
         <div className="cart-bar">
           <span>{t(lang, "cart")}：{cart.reduce((s, l) => s + l.qty, 0)} · ¥{cartTotal.toLocaleString()}</span>
           <button className="primary" disabled={cart.length === 0} onClick={readBack}>{t(lang, "orderNow")}</button>
