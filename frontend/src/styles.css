@@ -136,3 +136,18 @@ input[type="text"], input:not([type]) { font: inherit; padding: 10px 12px; borde
   .left { border-right: none; border-bottom: 1px solid var(--line); }
   .staff-cols, .demo-split { grid-template-columns: 1fr; }
 }
+
+/* 店主 */
+.owner { padding: 16px 20px; max-width: 1100px; margin: 0 auto; }
+.owner header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.owner h1 { font-size: 1.2rem; color: var(--indigo); margin: 0; }
+.upload { cursor: pointer; padding: 10px 16px; border-radius: 10px; background: var(--indigo); color: #fff; }
+.type-switch { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.owner-item { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; }
+.owner-row { display: flex; gap: 10px; align-items: center; padding: 10px 14px; cursor: pointer; flex-wrap: wrap; }
+.tag.unconfirmed { background: var(--unknown); }
+.tag.confirmed { background: var(--ok); }
+.owner-detail { padding: 0 14px 14px; display: grid; gap: 12px; }
+.owner-detail h4 { margin: 4px 0; }
+.owner-detail input { margin: 4px 4px 4px 0; }
+.conv { background: #f3f6fa; border-radius: 10px; padding: 10px; font-size: 0.9rem; line-height: 1.7; }

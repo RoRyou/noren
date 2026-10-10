@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.api.context import dispatcher
+from app.api.owner import router as owner_router
 from app.api.routes import router as api_router
 from app.api.ws import router as ws_router
 from app.config import REPO_ROOT, settings
@@ -42,6 +43,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="NOREN", lifespan=lifespan)
 app.include_router(api_router)
+app.include_router(owner_router)
 app.include_router(ws_router)
 
 

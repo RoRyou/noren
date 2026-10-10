@@ -4,10 +4,11 @@ import { api } from "./api";
 import { Seating } from "./customer/Seating";
 import { TableScreen } from "./customer/TableScreen";
 import { Lang } from "./i18n";
+import { OwnerPage } from "./owner/OwnerPage";
 import { StaffBoard } from "./staff/StaffBoard";
 import "./styles.css";
 
-// 画面の切り替え：/staff = 店員、/demo = お客様と店員を並べて表示（審査用）、それ以外 = お客様
+// 画面の切り替え：/staff = 店員、/owner = 店主、/demo = お客様と店員を並べて表示（審査用）、それ以外 = お客様
 function App() {
   const [ready, setReady] = useState(false);
   const [table, setTable] = useState<{ sid: string; lang: Lang } | null>(() => {
@@ -23,6 +24,7 @@ function App() {
 
   if (!ready) return <div className="loading">…</div>;
   if (path.startsWith("/staff")) return <StaffBoard />;
+  if (path.startsWith("/owner")) return <OwnerPage />;
   if (path.startsWith("/demo")) {
     return (
       <div className="demo-split">

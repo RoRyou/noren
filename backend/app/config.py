@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # デモ店の時刻（ラストオーダーなどの判定に使う）。審査員がいつ試してもいいように固定する。空なら実時刻
     demo_clock: str = "19:00"
 
+    # 音声ではない処理（メニュー取り込み・店舗エージェント）のモデル。global エンドポイントだけで提供
+    text_model: str = "gemini-3.8-flash"
+    text_location: str = "global"
+
     # 音声の会話のサイト全体の上限（1 日あたりの分）。超えたら文字とタッチだけになる
     daily_voice_minutes: int = 300
 
