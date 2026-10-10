@@ -97,6 +97,16 @@ class OwnerService:
         await self.repo.audit("owner", "publish", {"item_id": item_id, "price": price}, "ok")
         return {"ok": True}
 
+    async def set_policy(self, key: str, value: str) -> dict:
+        """サービスポリシーの変更（記録を残す）。"""
+        store = await self.repo.store()
+        if key not in store.service_policy or value not in ("auto", "confirm", "staff"):
+            raise ValueError(key)
+        policy = {**store.service_policy, key: value}
+        await self.repo.root.update({"service_policy": policy, "rule_version": store.rule_version + 1})
+        await self.repo.audit("owner", "service_policy", {key: value}, "ok")
+        return policy
+
     async def set_business_type(self, business_type: str) -> dict:
         preset = PRESETS[business_type]
         await self.repo.root.update({"business_type": business_type, **preset})

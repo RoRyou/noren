@@ -33,7 +33,12 @@ class StoreAgentService:
             changes = [{"knowledge": intent.knowledge_ja, "items": valid_ids}]
 
         result = {"intent": intent.intent, "ingredients": intent.ingredients, "changes": changes}
-        needs_confirm = intent.intent == "sold_out" and len(changes) >= CONFIRM_THRESHOLD
+        policy = (await self.repo.store()).service_policy
+        if intent.intent == "sold_out":
+            key = "sold_out_multi" if len(changes) >= CONFIRM_THRESHOLD else "sold_out_single"
+            needs_confirm = policy.get(key, "confirm") == "confirm"
+        else:
+            needs_confirm = intent.intent == "todays_pick" and policy.get("todays_pick", "auto") == "confirm"
         await self.repo.audit("store_agent", "understand", {"text": text}, intent.intent,
                               reason=f"{len(changes)} changes, confirm={needs_confirm}")
         if not changes:

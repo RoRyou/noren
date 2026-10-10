@@ -186,6 +186,10 @@ class TableService:
 
         if not can_customer_cancel(OrderLine.model_validate(line)):
             return {"ok": False, "reason": "already_cooking"}  # 調理が始まったら店員へ
+        if (await self.repo.store()).service_policy.get("cancel_before_cooking", "auto") == "staff":
+            await self.escalate(snap.to_dict()["session_id"], esc_rules.Reason.other, f"「{line['name']['ja']}」を取り消したい",
+                                actor="policy", translated=False)
+            return {"ok": False, "reason": "staff_will_handle"}
         order = await self.repo.set_line_status(order_id, line_id, LineStatus.cancelled, actor="customer")
         self.dispatcher.kick(self.repo)
         return {"ok": True, "order": _dump(order)}

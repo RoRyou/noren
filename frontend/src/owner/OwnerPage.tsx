@@ -9,6 +9,13 @@ const ALLERGEN_JA: Record<string, string> = {
   apple: "りんご", gelatin: "ゼラチン",
 };
 const TYPES: Record<string, string> = { izakaya: "居酒屋", teishoku: "定食屋", ramen: "ラーメン店", cafe: "カフェ" };
+const POLICY_LABEL: Record<string, string> = {
+  sold_out_multi: "一言で 2 品以上が品切れになるとき",
+  sold_out_single: "1 品だけの品切れ",
+  todays_pick: "今日のおすすめの変更",
+  cancel_before_cooking: "調理前のお客様の取り消し",
+};
+const VALUE_LABEL: Record<string, string> = { auto: "AI が自動で", confirm: "店員の確認後", staff: "店員に任せる" };
 const CATEGORY_JA: Record<string, string> = {
   drink: "飲み物", snack: "一品", fried: "揚げ物", grill: "焼き物・炒め物", sashimi: "刺身", noodle: "麺",
   rice: "ご飯もの", dessert: "甘味", topping: "トッピング", set: "セット",
@@ -45,6 +52,10 @@ export function OwnerPage() {
     await load();
   }
 
+  const [policy, setPolicy] = useState<Record<string, string>>({});
+  useEffect(() => {
+    void call("GET", "/api/owner/policy").then(setPolicy);
+  }, []);
   const drafts = items.filter((i) => !i.published);
   const published = items.filter((i) => i.published);
 
@@ -65,6 +76,20 @@ export function OwnerPage() {
       </header>
       {busy && <div className="banner">{busy}</div>}
       <p className="note">AI はメニューの書き写し・質問・翻訳だけを行います。アレルゲンは、店主が答えた食材からシステムが換算します（AI が推測することはありません）。</p>
+      <h2>AI に任せる範囲（サービスポリシー）</h2>
+      <div className="policy">
+        {Object.entries(POLICY_LABEL).map(([k, label]) => (
+          <div key={k} className="policy-row">
+            <span>{label}</span>
+            {(k === "cancel_before_cooking" ? ["auto", "staff"] : ["auto", "confirm"]).map((v) => (
+              <button key={v} className={policy[k] === v ? "chip on" : "chip"} onClick={async () => setPolicy(await call("PATCH", "/api/owner/policy", { key: k, value: v }))}>
+                {VALUE_LABEL[v]}
+              </button>
+            ))}
+          </div>
+        ))}
+        <p className="small">重いアレルギー・急病・苦情・誤配膳は常に店員へ。価格とアレルゲンは AI が変えることはできません。</p>
+      </div>
       <h2>下書き（{drafts.length}）</h2>
       {drafts.map((i) => <ItemRow key={i.id} item={i} items={items} open={open === i.id} onToggle={() => setOpen(open === i.id ? null : i.id)} reload={load} />)}
       <h2>公開中（{published.length}）</h2>

@@ -34,6 +34,11 @@ class StoreIn(BaseModel):
     business_type: str
 
 
+class PolicyIn(BaseModel):
+    key: str
+    value: str
+
+
 def owner(ctx: Ctx = Depends(http_ctx)) -> OwnerService:
     return OwnerService(ctx.repo)
 
@@ -70,6 +75,19 @@ async def translate(item_id: str, svc: OwnerService = Depends(owner)) -> dict:
 @router.post("/menu/{item_id}/publish")
 async def publish(item_id: str, body: PublishIn, svc: OwnerService = Depends(owner)) -> dict:
     return await svc.publish(item_id, body.name_ja, body.price, body.published)
+
+
+@router.get("/policy")
+async def get_policy(ctx: Ctx = Depends(http_ctx)) -> dict:
+    return (await ctx.repo.store()).service_policy
+
+
+@router.patch("/policy")
+async def set_policy(body: PolicyIn, svc: OwnerService = Depends(owner)) -> dict:
+    try:
+        return await svc.set_policy(body.key, body.value)
+    except ValueError as e:
+        raise HTTPException(400, "unknown_policy") from e
 
 
 @router.patch("/store")

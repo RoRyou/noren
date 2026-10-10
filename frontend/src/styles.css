@@ -153,3 +153,6 @@ input[type="text"], input:not([type]) { font: inherit; padding: 10px 12px; borde
 .conv { background: #f3f6fa; border-radius: 10px; padding: 10px; font-size: 0.9rem; line-height: 1.7; }
 .interpret { background: #fff3e0; border-color: var(--cross); color: var(--cross); align-self: flex-start; }
 .interpret.on { background: var(--cross); color: #fff; }
+.policy { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+.policy-row { display: flex; gap: 8px; align-items: center; padding: 4px 0; flex-wrap: wrap; }
+.policy-row span { min-width: 260px; }

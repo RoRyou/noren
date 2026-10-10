@@ -175,3 +175,11 @@ class StoreSettings(BaseModel):
     rules: list[dict] = []  # 店舗ルール（石川県 18 項目のテンプレート）
     self_service: dict[str, Localized] = {}  # 「お冷はセルフ」など
     rule_version: int = 1
+    # サービスポリシー：AI が自動で行うか（auto）、店員の確認を待つか（confirm）、店員に任せるか（staff）。
+    # 重いアレルギー・急病などは常に店員へ、価格・アレルゲンは AI が変えられない（ここでは変えられない）
+    service_policy: dict[str, str] = {
+        "sold_out_multi": "confirm",  # 一言で 2 品以上が品切れになるとき
+        "sold_out_single": "auto",  # 1 品だけの品切れ
+        "todays_pick": "auto",  # 今日のおすすめ
+        "cancel_before_cooking": "auto",  # 調理前のお客様の取り消し（staff なら店員へ）
+    }

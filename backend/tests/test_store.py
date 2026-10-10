@@ -214,3 +214,19 @@ async def test_prepay_kitchen_waits_for_payment(env):
         await repo.set_line_status(order["id"], order["lines"][0]["line_id"], LineStatus.confirmed)  # 未払いは厨房が受けない
     await repo.mark_paid(order["id"])
     await repo.set_line_status(order["id"], order["lines"][0]["line_id"], LineStatus.confirmed)
+
+
+async def test_service_policy_cancel_goes_to_staff(env):
+    svc, repo, *_ = env
+    from app.services.owner import OwnerService
+
+    await OwnerService(repo).set_policy("cancel_before_cooking", "staff")
+    s = await svc.seat("8", 1, "ja")
+    await svc.declare(s.id, [{"guest_id": "g1"}])
+    await svc.add_to_cart(s.id, "s_edamame", 1)
+    rb = await svc.read_back(s.id)
+    order = (await svc.submit(s.id, rb["confirm_token"], "k"))["order"]
+    r = await svc.cancel_line(order["id"], order["lines"][0]["line_id"])
+    assert r["reason"] == "staff_will_handle"
+    assert any(e["session_id"] == s.id for e in await repo.open_escalations())
+    assert (await repo.store()).rule_version == 2  # ポリシーの変更で規則のバージョンが上がる
