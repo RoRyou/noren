@@ -90,7 +90,8 @@ async def table_ws(ws: WebSocket, sid: str):
                 if limit:  # 費用の上限：文字とタッチで続けてもらう
                     await send_json({"type": "voice_state", "state": "unavailable", "reason": limit, "fallback": "touch"})
                     continue
-                voice = VoiceSession(ctx.svc, sid, send_json, send_audio)
+                mode = "interpret" if data.get("mode") == "interpret" else "reception"
+                voice = VoiceSession(ctx.svc, sid, send_json, send_audio, mode=mode)
                 _active_voice += 1
 
                 async def release(v=voice):

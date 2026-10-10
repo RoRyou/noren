@@ -1,6 +1,6 @@
 // 入座の流れ：言語 → 人数 → ゲストごとの申告（必須）→ 録音のお知らせ・お店のルール。
 import { useState } from "react";
-import { ALLERGENS, DIETS, Lang, t } from "../i18n";
+import { ALLERGENS, DIETS, LANGS, Lang, t } from "../i18n";
 import { api, Guest } from "../api";
 
 type Decl = { guest_id: string; allergies: string[]; diets: string[]; severe: boolean; none: boolean };
@@ -42,13 +42,10 @@ export function Seating({ onDone }: { onDone: (sid: string, lang: Lang) => void 
     const store = view.store;
     const lines: string[] = [];
     if (store.otoshi_price && store.otoshi_label) {
-      lines.push(
-        lang === "ja"
-          ? `お通し（${store.otoshi_label.ja}）：お一人 ${store.otoshi_price} 円`
-          : `${store.otoshi_label.en}: ¥${store.otoshi_price} per person`,
-      );
+      const label = store.otoshi_label[lang] || store.otoshi_label.en;
+      lines.push(lang === "ja" ? `お通し（${store.otoshi_label.ja}）：お一人 ${store.otoshi_price} 円` : `${label}: ¥${store.otoshi_price} / person`);
     }
-    for (const r of store.rules) if (r.announce) lines.push(r.text[lang] || r.text.ja);
+    for (const r of store.rules) if (r.announce) lines.push(r.text[lang] || r.text.en || r.text.ja);
     setRules(lines);
     setBusy(false);
     setStep("notice");
@@ -60,9 +57,9 @@ export function Seating({ onDone }: { onDone: (sid: string, lang: Lang) => void 
         <div className="noren-cloth">のれん</div>
         <h1>{t(lang, "welcome")}</h1>
         <div className="lang-switch">
-          {(["ja", "en"] as Lang[]).map((l) => (
-            <button key={l} className={l === lang ? "chip on" : "chip"} onClick={() => setLang(l)}>
-              {l === "ja" ? "日本語" : "English"}
+          {LANGS.map((l) => (
+            <button key={l.code} className={l.code === lang ? "chip on" : "chip"} onClick={() => setLang(l.code)}>
+              {l.label}
             </button>
           ))}
         </div>

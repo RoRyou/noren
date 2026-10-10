@@ -83,6 +83,8 @@ def test_severity_does_not_change_verdict():
     ("gluten_free", "f_karaage", Verdict.ng),
     ("gluten_free", "s_edamame", Verdict.ok),
     ("no_five_pungent", "s_cucumber", Verdict.ng),  # にんにく
+    ("vegetarian", "f_fries", Verdict.cross),  # 唐揚げ・海老天と同じ油
+    ("vegan", "f_fries", Verdict.cross),
 ])
 def test_diets(diet, item, expected):
     assert judge(MENU[item], guest("g1", diets=[diet])).verdict == expected

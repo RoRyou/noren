@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, Card, CartLine, Check, Guest } from "../api";
 import { Mic, Player } from "../audio";
-import { allergenName, expertLabel, Lang, statusLabel, t } from "../i18n";
+import { allergenName, expertLabel, hasVoice, Lang, statusLabel, t } from "../i18n";
 
 type Turn = { role: "user" | "ai"; text: string; final: boolean };
 const CARD_KINDS = new Set(["sold_out", "rejected", "last_order"]); // お客様の画面にカードで知らせる通知
@@ -32,6 +32,8 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [text, setText] = useState("");
   const [banner, setBanner] = useState("");
+  const [staffComing, setStaffComing] = useState(false);
+  const [mode, setMode] = useState<"reception" | "interpret">("reception");
   const ws = useRef<WebSocket | null>(null);
   const mic = useRef(new Mic());
   const player = useRef(new Player());
@@ -156,7 +158,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
         setSheet({ kind: "bill", data: m });
         break;
       case "escalated":
-        setBanner(m.urgent ? t(lang, "emergencySent") : lang === "ja" ? "店員に連絡しました" : "We've let the staff know");
+        setBanner(m.urgent ? t(lang, "emergencySent") : t(lang, "staffNotified"));
         break;
       case "confirm_declaration":
         setSheet({ kind: "declaration", allergies: m.allergies, diets: m.diets });
@@ -168,11 +170,27 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
       case "closed":
         location.reload();
         break;
+      case "staff_coming":
+        setStaffComing(true);
+        setBanner(t(lang, "staffComing"));
+        break;
     }
   }
 
   // --- 会話 ---------------------------------------------------------------
+  async function startInterpret() {
+    if (voiceRef.current !== "closed" && voiceRef.current !== "unavailable") ws.current?.send(JSON.stringify({ type: "voice_stop" }));
+    setMode("interpret");
+    player.current.unlock();
+    setVoiceState("connecting");
+    await mic.current.start((pcm) => {
+      if (ws.current?.readyState === WebSocket.OPEN && voiceRef.current === "listening") ws.current.send(pcm);
+    });
+    ws.current?.send(JSON.stringify({ type: "voice_start", mode: "interpret" }));
+  }
+
   async function tapMic() {
+    setMode("reception");
     player.current.unlock();
     if (voiceRef.current === "speaking") {
       player.current.stop(); // 割り込み
@@ -287,13 +305,21 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
           <button className="chip" onClick={() => setTab("menu")}>{t(lang, "quickOrder")}</button>
           <button className="chip" onClick={async () => setSheet({ kind: "bill", data: await api.bill(sid) })}>{t(lang, "quickBill")}</button>
         </div>
+        {!hasVoice(lang) && <div className="note small">{t(lang, "textOnly")}</div>}
         <div className="input-row">
-          <button className={`mic ${voice}`} onClick={tapMic}>
-            {voice === "closed" || voice === "unavailable" ? t(lang, "talk") : t(lang, voice === "speaking" ? "speaking" : voice === "connecting" ? "connecting" : "listening")}
-          </button>
+          {hasVoice(lang) && (
+            <button className={`mic ${voice}`} onClick={tapMic}>
+              {voice === "closed" || voice === "unavailable" ? t(lang, "talk") : t(lang, voice === "speaking" ? "speaking" : voice === "connecting" ? "connecting" : "listening")}
+            </button>
+          )}
           <input value={text} placeholder={t(lang, "typeHere")} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendText(text)} />
           <button onClick={() => sendText(text)}>{t(lang, "send")}</button>
         </div>
+        {staffComing && (
+          <button className={mode === "interpret" && voice !== "closed" ? "interpret on" : "interpret"} onClick={startInterpret}>
+            {t(lang, "interpret")}
+          </button>
+        )}
         <button className="emergency" onClick={async () => { await api.emergency(sid); setBanner(t(lang, "emergencySent")); }}>
           {t(lang, "emergency")}
         </button>
@@ -389,7 +415,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
                 <h3>{sheet.check.decision === "need_staff" ? t(lang, "needStaff") : t(lang, "blocked")}</h3>
                 <p>{cards[sheet.item_id]?.name}：{(sheet.check.for_guest && cards[sheet.item_id]?.marks[sheet.check.for_guest]?.reasons.join("、")) || sheet.check.reasons.join(", ")}</p>
                 {sheet.check.decision === "need_staff" && (
-                  <button className="chip" onClick={async () => { await api.askStaff(sid, sheet.item_id, sheet.check.for_guest); setBanner(lang === "ja" ? "店員に確認します" : "We'll check with the staff"); setSheet(null); }}>
+                  <button className="chip" onClick={async () => { await api.askStaff(sid, sheet.item_id, sheet.check.for_guest); setBanner(t(lang, "staffWillCheck")); setSheet(null); }}>
                     {t(lang, "askStaff")}
                   </button>
                 )}
@@ -409,7 +435,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
                     <b>{l.name} ×{l.qty}</b> {l.for_guest && <span className="who">{guestLabel(l.for_guest)}</span>} ¥{l.amount.toLocaleString()}
                     <div className="small">
                       {l.allergens.map((a: string) => allergenName(lang, a)).join("・")}
-                      {l.cross_contact.length > 0 && (lang === "ja" ? `（混入の可能性：${l.cross_contact.map((a: string) => allergenName(lang, a)).join("・")}）` : ` (may have contact: ${l.cross_contact.map((a: string) => allergenName(lang, a)).join(", ")})`)}
+                      {l.cross_contact.length > 0 && ` （${t(lang, "mayContact")}：${l.cross_contact.map((a: string) => allergenName(lang, a)).join("・")}）`}
                     </div>
                   </div>
                 ))}
@@ -464,7 +490,7 @@ function MultiGuest({ lang, guests, qty, title, onDone }: { lang: Lang; guests: 
   return (
     <>
       <h3>{t(lang, "whoFor")} — {title} ×{qty}</h3>
-      <p className="note">{lang === "ja" ? "お一人一つずつ選んでください" : "Choose one per person"}</p>
+      <p className="note">{t(lang, "onePerPerson")}</p>
       <div className="chips">
         {guests.map((g) => (
           <button key={g.id} className={sel.includes(g.id) ? "chip big on" : "chip big"} onClick={() => setSel((s) => (s.includes(g.id) ? s.filter((x) => x !== g.id) : [...s, g.id]))}>{g.label}</button>
@@ -481,12 +507,12 @@ function AlcoholSheet({ lang, guest, onAnswer }: { lang: Lang; guest?: Guest; on
   return (
     <>
       <h3>{t(lang, "alcoholTitle")} — {guest?.label}</h3>
-      <p>{lang === "ja" ? "20 歳以上ですか？" : "Are you 20 or older?"}</p>
+      <p>{t(lang, "isAdult")}</p>
       <div className="row">
         <button className={adult === true ? "chip on" : "chip"} onClick={() => setAdult(true)}>{t(lang, "yes")}</button>
         <button className={adult === false ? "chip on" : "chip"} onClick={() => setAdult(false)}>{t(lang, "no")}</button>
       </div>
-      <p>{lang === "ja" ? "今日、車・自転車を運転しますか？" : "Will you drive or cycle today?"}</p>
+      <p>{t(lang, "isDriving")}</p>
       <div className="row">
         <button className={driving === true ? "chip on" : "chip"} onClick={() => setDriving(true)}>{t(lang, "yes")}</button>
         <button className={driving === false ? "chip on" : "chip"} onClick={() => setDriving(false)}>{t(lang, "no")}</button>
@@ -524,17 +550,6 @@ function ItemCard({ c, lang, guests, onAdd }: { c: Card; lang: Lang; guests: Gue
 
 function noteText(lang: Lang, n: any, cards: Record<string, Card>): string {
   const name = cards[n.payload?.item_id]?.name ?? "";
-  const ja = lang === "ja";
-  switch (n.kind) {
-    case "sold_out":
-      return ja ? `${name}が品切れになりました` : `${name} just sold out`;
-    case "rejected":
-      return ja ? `${name}は厨房でお受けできませんでした` : `The kitchen couldn't take ${name}`;
-    case "last_order":
-      return ja ? "まもなくラストオーダーです" : "Last orders soon";
-    case "order_status":
-      return ja ? "ご注文の状況が更新されました" : "Your order was updated";
-    default:
-      return n.kind;
-  }
+  const key = { sold_out: "noteSoldOut", rejected: "noteRejected", last_order: "noteLastOrder" }[n.kind as string] ?? "noteUpdated";
+  return t(lang, key as Parameters<typeof t>[1]).replace("{name}", name);
 }

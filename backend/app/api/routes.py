@@ -251,7 +251,10 @@ async def update_escalation(eid: str, body: EscalationIn, ctx: Ctx = Depends(htt
     await ctx.repo.update_escalation(eid, fields)
     await ctx.repo.audit("staff", "escalation", {"id": eid, **fields}, "ok")
     hub.publish(ctx.repo.store_id, "staff", {"type": "escalation_updated", "id": eid, **fields})
-    return await ctx.repo.escalation(eid)
+    esc = await ctx.repo.escalation(eid)
+    if body.status == "acknowledged":  # お客様の画面に「店員が向かっています」と通訳ボタンを出す
+        hub.publish(ctx.repo.store_id, f"table:{esc['session_id']}", {"type": "ui", "event": "staff_coming", "handler": body.handler})
+    return esc
 
 
 @router.post("/staff/tables/{sid}/close")

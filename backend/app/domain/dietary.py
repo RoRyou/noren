@@ -25,6 +25,10 @@ class Verdict(StrEnum):
 
 _RANK = {Verdict.ok: 0, Verdict.cross: 1, Verdict.unknown: 2, Verdict.ng: 3}
 
+# 動物性のアレルゲン（菜食の方が、同じ油・器具の共用を気にするもの）
+ANIMAL_ALLERGENS = {"shrimp", "crab", "squid", "abalone", "salmon_roe", "salmon", "mackerel", "beef", "chicken", "pork",
+                    "gelatin", "egg", "milk"}
+
 
 @dataclass
 class GuestVerdict:
@@ -98,6 +102,14 @@ def _diet_check(diet: str, item: MenuItem) -> tuple[Verdict, list[str]]:
             unknown("gluten")
     if diet == "no_five_pungent" and "five_pungent" in tags:
         ng("five_pungent")
+    # 同じ油・器具の共用（混入の可能性）：菜食・ハラールの方にも △ として伝える（自動では通さない）
+    cross = set(item.cross_contact)
+    if diet in ("vegetarian", "vegan") and cross & ANIMAL_ALLERGENS and verdict == Verdict.ok:
+        verdict = Verdict.cross
+        reasons.append(f"diet:{diet}:shared_equipment")
+    if diet == "halal" and "pork" in cross and verdict == Verdict.ok:
+        verdict = Verdict.cross
+        reasons.append("diet:halal:shared_equipment_pork")
     return verdict, reasons
 
 
@@ -135,6 +147,24 @@ def judge_table(item: MenuItem, guests: list[Guest]) -> dict[str, GuestVerdict]:
     return {g.id: judge(item, g) for g in guests}
 
 
+DIET_REASON = {
+    "pork": {"ja": "豚肉を含みます", "en": "contains pork"},
+    "alcohol": {"ja": "酒類（みりん・料理酒を含む）を使っています", "en": "contains alcohol (incl. mirin or cooking sake)"},
+    "non_certified_meat": {"ja": "ハラール認証のない肉です", "en": "meat is not halal-certified"},
+    "animal_derived": {"ja": "動物由来の材料（ゼラチンなど）を使っています", "en": "contains animal-derived ingredients (e.g. gelatin)"},
+    "meat": {"ja": "肉を使っています", "en": "contains meat"},
+    "seafood": {"ja": "魚介を使っています", "en": "contains fish or seafood"},
+    "animal_dashi": {"ja": "動物性のだしを使っています", "en": "uses animal-based stock"},
+    "egg_or_milk": {"ja": "卵・乳を使っています", "en": "contains egg or dairy"},
+    "honey": {"ja": "はちみつを使っています", "en": "contains honey"},
+    "gluten": {"ja": "小麦・グルテンを含みます", "en": "contains wheat/gluten"},
+    "beef": {"ja": "牛肉を含みます", "en": "contains beef"},
+    "five_pungent": {"ja": "にんにく・ねぎ類を使っています", "en": "contains garlic or onions"},
+    "shared_equipment": {"ja": "同じ油・器具で肉や魚介も調理しています", "en": "cooked in the same oil/equipment as meat or seafood"},
+    "shared_equipment_pork": {"ja": "同じ油・器具で豚肉も調理しています", "en": "cooked in the same oil/equipment as pork"},
+}
+
+
 def describe_reasons(reasons: list[str], lang: str = "ja") -> list[str]:
     """判定理由を画面と AI 向けの短い文に変える（事実だけ。安全とは言わない）。"""
     from app.domain.allergens import allergen_label
@@ -154,5 +184,5 @@ def describe_reasons(reasons: list[str], lang: str = "ja") -> list[str]:
             out.append("アレルギー情報を確認できていません" if lang == "ja" else "allergy information has not been confirmed")
         elif kind == "diet":
             diet, _, what = rest.partition(":")
-            out.append(f"{diet}: {what}")
+            out.append(DIET_REASON.get(what, {}).get("ja" if lang == "ja" else "en", f"{diet}: {what}"))
     return out

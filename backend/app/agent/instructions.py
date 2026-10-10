@@ -49,6 +49,18 @@ RULES = """\
 """
 
 
+INTERPRET = """\
+あなたは飲食店のテーブルで、店員とお客様の間に入る通訳です。
+- 日本語が聞こえたら {lang} に、{lang} が聞こえたら日本語に、そのまま訳して話してください。
+- 訳すだけにします。自分の意見・返事・あいさつ・説明を足さないでください。
+- 聞き取れなかったときは「もう一度お願いします」とだけ、両方の言語で言ってください。
+"""
+
+
+def build_interpret_instruction(lang: str) -> str:
+    return INTERPRET.format(lang=LANG_NAME.get(lang, lang))
+
+
 def table_summary(session: TableSession, phase: Phase, cart_names: list[str], order_lines: list[str]) -> str:
     guests = []
     for g in session.guests:

@@ -21,7 +21,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from app.agent.instructions import build_instruction
+from app.agent.instructions import build_instruction, build_interpret_instruction
 from app.agent.tools import build_tools
 from app.config import settings
 from app.domain.escalation import Reason, detect_medical
@@ -46,7 +46,8 @@ def _vertex_kwargs() -> dict:
 
 class VoiceSession:
     def __init__(self, svc: TableService, session_id: str, send_json: SendJson, send_audio: SendAudio,
-                 idle_close_s: float = IDLE_CLOSE_S):
+                 idle_close_s: float = IDLE_CLOSE_S, mode: str = "reception"):
+        self.mode = mode  # reception = 接客 / interpret = 店員とお客様の通訳（ツールなし）
         self.svc = svc
         self.session_id = session_id
         self.send_json = send_json
@@ -85,14 +86,17 @@ class VoiceSession:
         cart_names = [f"{items[l.item_id].name.ja}×{l.qty}" + (f"（{l.for_guest}）" if l.for_guest else "")
                       for l in session.cart if l.item_id in items]
         order_lines = [f"{l['name']['ja']}×{l['qty']}[{l['status']}]" for o in view["orders"] for l in o["lines"]]
-        instruction = build_instruction(store, session, Phase(view["phase"]), cart_names, order_lines)
-
-        agent = LlmAgent(
-            name="reception",
-            model=Gemini(model=settings.live_model, client_kwargs=_vertex_kwargs()),
-            instruction=instruction,
-            tools=build_tools(self.svc, self.session_id, self.lang, self.emit, self.correlation),
-        )
+        if self.mode == "interpret":
+            agent = LlmAgent(name="interpreter", model=Gemini(model=settings.live_model, client_kwargs=_vertex_kwargs()),
+                             instruction=build_interpret_instruction(self.lang), tools=[])
+        else:
+            instruction = build_instruction(store, session, Phase(view["phase"]), cart_names, order_lines)
+            agent = LlmAgent(
+                name="reception",
+                model=Gemini(model=settings.live_model, client_kwargs=_vertex_kwargs()),
+                instruction=instruction,
+                tools=build_tools(self.svc, self.session_id, self.lang, self.emit, self.correlation),
+            )
         service = InMemorySessionService()
         runner = Runner(app_name="noren", agent=agent, session_service=service)
         adk_session = await service.create_session(app_name="noren", user_id=self.session_id)
@@ -107,7 +111,7 @@ class VoiceSession:
         )
         self.opened_at = time.monotonic()
         self.task = asyncio.create_task(self._consume(runner, adk_session.id, run_config))
-        await self.send_json({"type": "voice_state", "state": "listening"})
+        await self.send_json({"type": "voice_state", "state": "listening", "mode": self.mode})
         self._arm_idle()
 
     async def close(self, reason: str = "idle") -> None:
