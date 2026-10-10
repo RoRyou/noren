@@ -167,7 +167,8 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
                                       correlation_id=correlation())
             await emit({"type": "order_result", **result})
             if result.get("ok"):
-                return {"ok": True, "say": "received", "order_id": result["order"]["id"]}
+                # pay_first：先払いの店。「レジでお支払いください。お支払いの後に作ります」と伝える
+                return {"ok": True, "say": result["message_key"], "order_id": result["order"]["id"]}
             return result
         return await run("submit_order", {"confirm_token": confirm_token}, body)
 

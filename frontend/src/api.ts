@@ -84,6 +84,7 @@ export const api = {
   setEscalation: (eid: string, status: string, handler = "店員") =>
     call<any>("POST", `/api/staff/escalations/${eid}`, { status, handler }),
   closeTable: (sid: string) => call<any>("POST", `/api/staff/tables/${sid}/close`),
+  markPaid: (oid: string) => call<any>("POST", `/api/staff/orders/${oid}/paid`),
   soldOut: (item_ids: string[], sold_out: boolean) => call<any>("POST", "/api/staff/sold_out", { item_ids, sold_out }),
   audit: () => call<any[]>("GET", "/api/staff/audit"),
   storeAgent: (text: string) => call<any>("POST", "/api/staff/agent", { text }),

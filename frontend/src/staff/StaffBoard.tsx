@@ -44,7 +44,8 @@ export function StaffBoard() {
   }, [board.tables]);
 
   const tableNo = (sid: string) => board.tables.find((t: any) => t.id === sid)?.table_no ?? "?";
-  const lines = board.orders.flatMap((o: any) => o.lines.map((l: any) => ({ ...l, order_id: o.id, session_id: o.session_id })));
+  const lines = board.orders.flatMap((o: any) => o.lines.map((l: any) => ({ ...l, order_id: o.id, session_id: o.session_id, unpaid: o.prepay && !o.paid })));
+  const unpaid = board.orders.filter((o: any) => o.prepay && !o.paid);
 
   return (
     <div className="staff">
@@ -71,6 +72,14 @@ export function StaffBoard() {
           ))}
         </section>
         <section>
+          {unpaid.length > 0 && <h2>先払い：お支払い待ち</h2>}
+          {unpaid.map((o: any) => (
+            <div key={o.id} className="kline accepted">
+              <b>{tableNo(o.session_id)}番</b> {o.lines.map((l: any) => `${l.name.ja}×${l.qty}`).join("、")}
+              <span className="status">¥{o.lines.reduce((s: number, l: any) => s + l.unit_price * l.qty, 0).toLocaleString()}</span>
+              <button className="primary" onClick={async () => { await api.markPaid(o.id); await load(); }}>支払い確認</button>
+            </div>
+          ))}
           <h2>注文（料理ごと）</h2>
           {lines.map((l: any) => (
             <div key={l.line_id} className={`kline ${l.status}`}>
@@ -79,7 +88,8 @@ export function StaffBoard() {
               {l.is_alcohol && <span className="tag">お酒・年齢を目視</span>}
               <span className="status">{STATUS_JA[l.status]}</span>
               <div className="row">
-                {(NEXT[l.status] ?? []).map((n) => (
+                {l.unpaid && <span className="tag">未払い</span>}
+                {!l.unpaid && (NEXT[l.status] ?? []).map((n) => (
                   <button key={n.to} className={n.to === "rejected" ? "" : "primary"} onClick={async () => {
                     const reason = n.to === "rejected" ? prompt("断る理由") ?? "" : "";
                     await api.setLine(l.order_id, l.line_id, n.to, reason);

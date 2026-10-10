@@ -131,6 +131,7 @@ class Order(BaseModel):
     idempotency_key: str
     created_at: str = ""
     paid: bool = False
+    prepay: bool = False  # 先払いの店（ラーメン店など）：支払いを確認するまで厨房は受けない
 
 
 class SessionStatus(StrEnum):

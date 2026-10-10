@@ -196,3 +196,21 @@ async def test_audit_log_records_blocks(env):
     logs = await repo.audit_logs()
     blocked = next(l for l in logs if l["action"] == "add_item")
     assert blocked["result"] == "blocked" and "allergen:shrimp" in blocked["reason"] and blocked["correlation_id"] == "turn-1"
+
+
+async def test_prepay_kitchen_waits_for_payment(env):
+    svc, repo, *_ = env
+    from app.services.owner import OwnerService
+
+    await OwnerService(repo).set_business_type("ramen")
+    s = await svc.seat("7", 1, "ja")
+    await svc.declare(s.id, [{"guest_id": "g1"}])
+    await svc.add_to_cart(s.id, "s_edamame", 1)
+    rb = await svc.read_back(s.id)
+    r = await svc.submit(s.id, rb["confirm_token"], "k")
+    assert r["message_key"] == "pay_first"
+    order = r["order"]
+    with pytest.raises(TransitionError):
+        await repo.set_line_status(order["id"], order["lines"][0]["line_id"], LineStatus.confirmed)  # 未払いは厨房が受けない
+    await repo.mark_paid(order["id"])
+    await repo.set_line_status(order["id"], order["lines"][0]["line_id"], LineStatus.confirmed)

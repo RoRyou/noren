@@ -175,6 +175,8 @@ class TableService:
         await self.repo.audit(actor, "submit_order", {"order_id": order.id}, "allowed", correlation_id=correlation_id,
                               session_id=session_id)
         self.dispatcher.kick(self.repo)
+        if order.prepay:  # 先払い：レジで支払ってから厨房が作る
+            return {"ok": True, "order": _dump(order), "message_key": "pay_first"}
         return {"ok": True, "order": _dump(order), "message_key": "received"}  # 厨房が受けるまでは「受け付けました」
 
     async def cancel_line(self, order_id: str, line_id: str) -> dict:

@@ -47,6 +47,7 @@ const dict = {
   sendOrder: { ja: "この内容で送る", en: "Send order" },
   fix: { ja: "修正する", en: "Edit" },
   received: { ja: "受け付けました", en: "Received" },
+  payFirst: { ja: "受け付けました。先にレジでお支払いください。お支払いの後にお作りします。", en: "Received. Please pay at the register first — we'll start cooking after payment." },
   whoFor: { ja: "どなたの分ですか？", en: "Who is this for?" },
   alcoholTitle: { ja: "お酒の確認", en: "Before we serve alcohol" },
   alcoholQ: { ja: "20 歳以上で、今日は車・自転車を運転しませんか？", en: "Are you 20 or older and not driving or cycling today?" },

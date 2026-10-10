@@ -19,7 +19,7 @@ from app.domain.models import (
     Guest, LineStatus, Localized, MenuItem, Order, SessionStatus, StoreSettings, TableSession,
 )
 from app.domain.orders import (
-    StockError, build_lines, otoshi_charge, release_stock, take_stock, transition,
+    StockError, TransitionError, build_lines, otoshi_charge, release_stock, take_stock, transition,
 )
 
 JST = timezone(timedelta(hours=9))
@@ -189,7 +189,8 @@ class Repo:
             ts = now_iso()
             for l in lines:
                 l.updated_at = ts
-            order = Order(id=order_id, session_id=session_id, lines=lines, idempotency_key=idempotency_key, created_at=ts)
+            order = Order(id=order_id, session_id=session_id, lines=lines, idempotency_key=idempotency_key, created_at=ts,
+                          prepay=store.payment_timing == "prepay")
             transaction.set(order_ref, _dump(order))
             for c in changes:
                 transaction.update(item_refs[c.item_id], {"remaining": c.remaining, "sold_out": c.sold_out,
@@ -222,6 +223,8 @@ class Repo:
             item_ref = self.col("menu_items").document(line.item_id)
             item_snap = await item_ref.get(transaction=transaction)
             item = MenuItem.model_validate(item_snap.to_dict())
+            if order.prepay and not order.paid and to in (LineStatus.confirmed, LineStatus.cooking):
+                raise TransitionError("先払いの注文は、支払いを確認してから厨房が受けます")
             new_line = transition(line, to)  # できない遷移は TransitionError
             new_line.reject_reason = reason if to == LineStatus.rejected else line.reject_reason
             new_line.updated_at = now_iso()
@@ -238,6 +241,15 @@ class Repo:
 
         async with store_lock(self.store_id):
             return await txn(self.db.transaction(max_attempts=TXN_ATTEMPTS))
+
+    async def mark_paid(self, order_id: str, actor: str = "staff") -> Order:
+        """先払いの支払いを確認した（店員がレジで受け取った）。"""
+        ref = self.col("orders").document(order_id)
+        await ref.update({"paid": True})
+        order = Order.model_validate((await ref.get()).to_dict())
+        await self.add_outbox("order_paid", {"order_id": order_id, "session_id": order.session_id})
+        await self.audit(actor, "mark_paid", {"order_id": order_id}, "ok", session_id=order.session_id)
+        return order
 
     async def set_sold_out(self, item_ids: list[str], sold_out: bool, actor: str) -> None:
         @firestore.async_transactional

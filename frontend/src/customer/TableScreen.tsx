@@ -147,7 +147,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
       case "order_result":
         if (m.ok) {
           setSheet(null);
-          setBanner(t(lang, "received"));
+          setBanner(m.message_key === "pay_first" ? t(lang, "payFirst") : t(lang, "received"));
           setTab("order");
         }
         void refresh();
@@ -253,7 +253,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
     const r = await api.submit(sid, token);
     if (r.ok) {
       setSheet(null);
-      setBanner(t(lang, "received"));
+      setBanner(r.message_key === "pay_first" ? t(lang, "payFirst") : t(lang, "received"));
       setTab("order");
     } else setBanner(r.reason);
     await refresh();

@@ -235,6 +235,14 @@ async def set_line(oid: str, line_id: str, body: LineStatusIn, ctx: Ctx = Depend
     return _dump(order)
 
 
+@router.post("/staff/orders/{oid}/paid")
+async def mark_paid(oid: str, ctx: Ctx = Depends(http_ctx)) -> dict:
+    """先払いの支払いを確認した。"""
+    order = await ctx.repo.mark_paid(oid)
+    ctx.svc.dispatcher.kick(ctx.repo)
+    return _dump(order)
+
+
 @router.post("/staff/escalations/{eid}")
 async def update_escalation(eid: str, body: EscalationIn, ctx: Ctx = Depends(http_ctx)) -> dict:
     fields = {"status": body.status}

@@ -69,6 +69,9 @@ class Dispatcher:
                 rules.Notification("staff", "menu_updated", p, f"{eid}:menu")]
         if kind == "escalation_created":
             return [rules.Notification("staff", "escalation", p, f"{eid}:staff")]
+        if kind == "order_paid":
+            return [rules.Notification("staff", "order_updated", p, f"{eid}:staff"),
+                    rules.Notification(f"table:{p['session_id']}", "order_status", p, f"{eid}:table")]
         return []
 
     def _after(self, repo: Repo, ev: dict) -> None:
