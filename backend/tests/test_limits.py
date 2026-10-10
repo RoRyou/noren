@@ -33,7 +33,7 @@ async def test_voice_budget(monkeypatch):
     client = firestore.AsyncClient(project=f"demo-limits-{uuid.uuid4().hex[:6]}")
     budget = limits.VoiceBudget(client)
     assert await budget.check("demo_a") is None
-    await budget.add("demo_a", limits.PER_VISITOR_DAILY_S)
+    await budget.add("demo_a", settings.per_visitor_voice_minutes * 60)
     assert await budget.check("demo_a") == "visitor_limit"
     assert await budget.check("demo_b") is None
     monkeypatch.setattr(settings, "daily_voice_minutes", 15)

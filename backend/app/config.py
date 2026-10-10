@@ -36,6 +36,8 @@ class Settings(BaseSettings):
 
     # 音声の会話のサイト全体の上限（1 日あたりの分）。超えたら文字とタッチだけになる
     daily_voice_minutes: int = 300
+    # 訪問者（デモ店）ごとの音声の上限（1 日あたりの分）。評価をまとめて回すときは環境変数で上げる
+    per_visitor_voice_minutes: int = 15
 
     # コスト対策：無通話の Live セッションは閉じ、同時セッション数に上限を設ける
     live_idle_timeout_s: int = 120

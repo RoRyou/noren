@@ -85,8 +85,10 @@ def check_add(
     verdicts = judge_table(item, session.guests)
     differs = any(v.verdict != Verdict.ok for v in verdicts.values())
     if target is None and (differs or item.is_alcohol):
-        # 「私」「me」を AI がゲストに結び付けない。画面で選んでもらう
-        return CartCheck(Decision.need_guest, ["who_is_it_for"], None, verdicts)
+        # 「私」「me」を AI がゲストに結び付けない。画面で選んでもらう。
+        # お酒を何杯も頼まれたら、一人一杯ずつ選んでもらう（年齢・運転の確認が人ごとなので）
+        reasons = ["who_is_it_for"] + (["one_per_guest"] if item.is_alcohol and qty > 1 else [])
+        return CartCheck(Decision.need_guest, reasons, None, verdicts)
 
     check = CartCheck(Decision.ok, [], target, verdicts)
     if target is not None:

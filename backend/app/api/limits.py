@@ -18,7 +18,7 @@ from app.config import settings
 from app.store.repo import JST
 
 DEMO_PER_IP_HOUR = 10
-PER_VISITOR_DAILY_S = 15 * 60
+PER_VISITOR_DAILY_S = 15 * 60  # 既定値（settings.per_visitor_voice_minutes で上書き）
 
 _demo_creations: dict[str, deque] = defaultdict(deque)
 
@@ -51,7 +51,7 @@ class VoiceBudget:
         data = snap.to_dict() or {}
         if data.get("total_s", 0) >= settings.daily_voice_minutes * 60:
             return "daily_limit"
-        if data.get("by_store", {}).get(store_id, 0) >= PER_VISITOR_DAILY_S:
+        if data.get("by_store", {}).get(store_id, 0) >= settings.per_visitor_voice_minutes * 60:
             return "visitor_limit"
         return None
 

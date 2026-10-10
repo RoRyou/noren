@@ -8,7 +8,7 @@ type Turn = { role: "user" | "ai"; text: string; final: boolean };
 const CARD_KINDS = new Set(["sold_out", "rejected", "last_order"]); // お客様の画面にカードで知らせる通知
 type VoiceState = "closed" | "connecting" | "listening" | "speaking" | "unavailable";
 type Sheet =
-  | { kind: "guest"; item_id: string; qty: number; verdicts?: Check["verdicts"] }
+  | { kind: "guest"; item_id: string; qty: number; verdicts?: Check["verdicts"]; multi?: boolean }
   | { kind: "alcohol"; item_id: string; qty: number; for_guest: string }
   | { kind: "blocked"; item_id: string; check: Check; alternatives: Card[] }
   | { kind: "readback"; data: any }
@@ -133,7 +133,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
         setCart(m.cart);
         break;
       case "ask_guest":
-        if (m.item_id) setSheet({ kind: "guest", item_id: m.item_id, qty: m.qty ?? 1, verdicts: m.verdicts });
+        if (m.item_id) setSheet({ kind: "guest", item_id: m.item_id, qty: m.qty ?? 1, verdicts: m.verdicts, multi: (m.qty ?? 1) > 1 && cards[m.item_id]?.is_alcohol });
         break;
       case "ask_alcohol":
         setSheet({ kind: "alcohol", item_id: m.item_id, qty: m.qty ?? 1, for_guest: m.for_guest });
@@ -210,7 +210,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
         setSheet(null);
         break;
       case "need_guest":
-        setSheet({ kind: "guest", item_id, qty, verdicts: check.verdicts });
+        setSheet({ kind: "guest", item_id, qty, verdicts: check.verdicts, multi: check.reasons.includes("one_per_guest") });
         break;
       case "need_alcohol_check":
         setSheet({ kind: "alcohol", item_id, qty, for_guest: check.for_guest ?? guests[0]?.id });
@@ -220,11 +220,28 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
     }
   }
 
+  // 一人一つずつ追加し、お酒の確認が必要な人を順番に聞く
+  const [alcoholQueue, setAlcoholQueue] = useState<{ item_id: string; guests: string[] } | null>(null);
+  async function addForGuests(item_id: string, ids: string[]) {
+    const r = await api.addCart(sid, item_id, 1, null, ids);
+    setCart(r.cart);
+    const pending = (r.checks ?? [r.check]).filter((c) => c.decision === "need_alcohol_check").map((c) => c.for_guest!);
+    if (pending.length) {
+      setAlcoholQueue({ item_id, guests: pending.slice(1) });
+      setSheet({ kind: "alcohol", item_id, qty: 1, for_guest: pending[0] });
+    } else handleCheck(item_id, 1, r.check, r.alternatives ?? []);
+  }
+
   async function answerAlcohol(guest_id: string, adult: boolean, driving: boolean, item_id: string, qty: number) {
     await api.alcohol(sid, guest_id, adult, driving);
     await refresh();
     if (adult && !driving) await addItem(item_id, qty, guest_id);
     else setSheet(null);
+    if (alcoholQueue && alcoholQueue.guests.length) {
+      const [next, ...rest] = alcoholQueue.guests;
+      setAlcoholQueue({ item_id: alcoholQueue.item_id, guests: rest });
+      setSheet({ kind: "alcohol", item_id: alcoholQueue.item_id, qty: 1, for_guest: next });
+    } else setAlcoholQueue(null);
   }
 
   async function readBack() {
@@ -346,7 +363,10 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
       {sheet && (
         <div className="sheet-backdrop" onClick={() => setSheet(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            {sheet.kind === "guest" && (
+            {sheet.kind === "guest" && sheet.multi && (
+              <MultiGuest lang={lang} guests={guests} qty={sheet.qty} title={cards[sheet.item_id]?.name ?? ""} onDone={(ids) => addForGuests(sheet.item_id, ids)} />
+            )}
+            {sheet.kind === "guest" && !sheet.multi && (
               <>
                 <h3>{t(lang, "whoFor")} — {cards[sheet.item_id]?.name}</h3>
                 <div className="chips">
@@ -436,6 +456,22 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
       )}
       <div className="demo-clock">{t(lang, "demoClock")}</div>
     </div>
+  );
+}
+
+function MultiGuest({ lang, guests, qty, title, onDone }: { lang: Lang; guests: Guest[]; qty: number; title: string; onDone: (ids: string[]) => void }) {
+  const [sel, setSel] = useState<string[]>([]);
+  return (
+    <>
+      <h3>{t(lang, "whoFor")} — {title} ×{qty}</h3>
+      <p className="note">{lang === "ja" ? "お一人一つずつ選んでください" : "Choose one per person"}</p>
+      <div className="chips">
+        {guests.map((g) => (
+          <button key={g.id} className={sel.includes(g.id) ? "chip big on" : "chip big"} onClick={() => setSel((s) => (s.includes(g.id) ? s.filter((x) => x !== g.id) : [...s, g.id]))}>{g.label}</button>
+        ))}
+      </div>
+      <button className="primary" disabled={sel.length === 0} onClick={() => onDone(sel)}>OK ({sel.length})</button>
+    </>
   );
 }
 

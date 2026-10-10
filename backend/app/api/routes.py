@@ -58,6 +58,7 @@ class CartIn(BaseModel):
     item_id: str
     qty: int = 1
     for_guest: str | None = None
+    for_guests: list[str] | None = None  # お酒などを一人一つずつ（画面で複数選んだとき）
     options: dict[str, str] = {}
 
 
@@ -110,13 +111,21 @@ async def recommend(sid: str, taste: str | None = None, category: str | None = N
 
 @router.post("/tables/{sid}/cart")
 async def add_cart(sid: str, body: CartIn, ctx: Ctx = Depends(http_ctx)) -> dict:
-    check, session = await ctx.svc.add_to_cart(sid, body.item_id, body.qty, body.for_guest, body.options, actor="customer_touch")
-    out = {"check": check.to_dict(), "cart": [l.model_dump() for l in session.cart]}
+    if body.for_guests:  # 一人一つずつ追加し、確認が必要な人を返す
+        checks = []
+        for g in body.for_guests:
+            c, session = await ctx.svc.add_to_cart(sid, body.item_id, 1, g, body.options, actor="customer_touch")
+            checks.append(c)
+        check = next((c for c in checks if not c.ok), checks[-1])
+        out = {"check": check.to_dict(), "checks": [c.to_dict() for c in checks], "cart": [l.model_dump() for l in session.cart]}
+    else:
+        check, session = await ctx.svc.add_to_cart(sid, body.item_id, body.qty, body.for_guest, body.options, actor="customer_touch")
+        out = {"check": check.to_dict(), "cart": [l.model_dump() for l in session.cart]}
     if check.decision.value in ("rejected", "need_staff"):
         out["alternatives"] = await ctx.svc.alternatives_for(sid, body.item_id, check.for_guest)
     item = (await ctx.repo.menu()).get(body.item_id)
     name = item.name.ja if item else body.item_id
-    who = f"{body.for_guest} の分として" if body.for_guest else ""
+    who = f"{body.for_guest or '、'.join(body.for_guests or [])} の分として" if (body.for_guest or body.for_guests) else ""
     say = {"ok": f"{name}を{who}カートに追加しました。",
            "need_alcohol_check": f"{name}は{who}お酒の確認が必要です（画面に確認を出しています）。",
            "need_guest": f"{name}はどなたの分か選ぶ必要があります。",
