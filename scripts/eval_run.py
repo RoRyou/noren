@@ -85,7 +85,7 @@ class Run:
 
     async def ai_turn(self, sent_at: float, timeout: float = 40) -> dict:
         """AI の返答（話し終わるまで）を待ち、その間の画面イベントを集める。"""
-        text, events, first, done_at = "", [], None, None
+        text, events, first, done_at, tools = "", [], None, None, []
         end = time.monotonic() + timeout
         while time.monotonic() < end:
             try:
@@ -102,6 +102,8 @@ class Run:
                 text += ev["text"]
             elif ev["type"] == "ui":
                 events.append(ev)
+                if ev.get("event") == "expert":
+                    tools.append(ev["tool"])
             elif ev["type"] == "turn_complete":
                 done_at = time.monotonic()
             elif ev["type"] == "voice_state" and ev.get("state") in ("closed", "unavailable"):
@@ -109,7 +111,7 @@ class Run:
                 break
         if first is not None:
             self.latencies.append(first)
-        return {"text": text, "events": events}
+        return {"text": text, "events": events, "tools": tools}
 
     async def tap(self, events: list[dict]) -> list[str]:
         """画面で押す操作（台本どおり）。押したら説明を返す。"""
@@ -176,7 +178,7 @@ class Run:
                 self.ui += turn["events"]
                 if not turn["text"]:
                     self.silent_turns += 1
-                self.history.append({"role": "ai", "text": turn["text"]})
+                self.history.append({"role": "ai", "text": turn["text"], "tools": turn["tools"]})
                 taps = await self.tap(turn["events"])
                 loops = 0
                 while taps and loops < 4:  # 押した結果に AI が続けて話す（無限に続かないよう 4 回まで）
@@ -185,7 +187,7 @@ class Run:
                     turn = await self.ai_turn(time.monotonic(), timeout=20)
                     self.ui += turn["events"]
                     if turn["text"]:
-                        self.history.append({"role": "ai", "text": turn["text"]})
+                        self.history.append({"role": "ai", "text": turn["text"], "tools": turn["tools"]})
                     taps = await self.tap(turn["events"])
                 if any(e.get("event") in ("order_result",) and e.get("ok") for e in turn["events"]) and self.s["set"] == "A":
                     break

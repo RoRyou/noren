@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Awaitable, Callable
 
@@ -17,6 +18,7 @@ from app.domain.escalation import Reason
 from app.services.table import TableService
 
 Emit = Callable[[dict], Awaitable[None]]
+log = logging.getLogger("noren.tools")
 
 EXPERT = {
     "search_menu": "menu", "get_item": "menu", "recommend": "recommend", "get_store_knowledge": "knowledge",
@@ -48,8 +50,11 @@ def _brief(card: dict, lang: str) -> dict:
     }
 
 
-def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, correlation: Callable[[], str]) -> list:
+def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, correlation: Callable[[], str],
+                heard: Callable[[], int] = lambda: 0) -> list:
+    """heard：お客様の発話・画面操作を受け取った回数。復唱の後にお客様の返事があったかを見るのに使う。"""
     recent: dict[str, tuple[float, dict]] = {}
+    read_back_at: list[int] = []  # 復唱したときの heard()
 
     async def run(name: str, args: dict, body: Callable[[], Awaitable[dict]]) -> dict:
         key = name + json.dumps(args, sort_keys=True, ensure_ascii=False)
@@ -57,7 +62,10 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             return recent[key][1]  # 同じ呼び出しの繰り返し → 前の結果を返す
         await emit({"type": "expert", "expert": EXPERT.get(name, "other"), "tool": name})
         result = await body()
-        recent[key] = (time.monotonic(), result)
+        if result.get("reason") != "not_confirmed_yet":  # 「返事を待って」はまとめない（返事の直後の送信を通す）
+            recent[key] = (time.monotonic(), result)
+        log.info("%s %s %s → %s", correlation(), name, json.dumps(args, ensure_ascii=False),
+                 json.dumps(result, ensure_ascii=False)[:300])
         return result
 
     async def search_menu(query: str = "", category: str = "", taste: str = "") -> dict:
@@ -149,6 +157,8 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             menu = await svc.repo.menu()
             out["cart_now"] = [f"{menu[l.item_id].name.ja}×{l.qty}" + (f"（{l.for_guest}）" if l.for_guest else "")
                                for l in s.cart if l.item_id in menu]
+            if check.ok:  # 「受け付けました」と言ってしまう対策（注文はまだ送っていない）
+                out["note"] = "カートに入れただけで、注文はまだ送っていません。ほかに注文がなければ read_back で復唱します。"
             return out
         return await run("add_item", {"item_id": item_id, "qty": qty, "for_guest": for_guest, "options": options or []}, body)
 
@@ -164,6 +174,7 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
         """注文：送信前の復唱。カートを再チェックし、確認用の confirm_token を返す。画面に確認シートが出る。"""
         async def body():
             rb = await svc.read_back(session_id)
+            read_back_at[:] = [heard()]
             await emit({"type": "read_back", **rb})
             return rb
         return await run("read_back", {}, body)
@@ -171,6 +182,9 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
     async def submit_order(confirm_token: str) -> dict:
         """注文：お客様が復唱に「はい」と答えた後だけ呼ぶ。厨房が受けるまでは「受け付けました」と伝える。"""
         async def body():
+            if read_back_at and heard() <= read_back_at[0]:  # 復唱をお客様が聞く前に送ろうとした
+                return {"ok": False, "reason": "not_confirmed_yet",
+                        "say": "復唱した内容をお客様に伝え、「はい」の返事を聞いてから submit_order を呼んでください。"}
             result = await svc.submit(session_id, confirm_token, idempotency_key=confirm_token, actor="reception_agent",
                                       correlation_id=correlation())
             await emit({"type": "order_result", **result})

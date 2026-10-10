@@ -230,3 +230,28 @@ async def test_service_policy_cancel_goes_to_staff(env):
     assert r["reason"] == "staff_will_handle"
     assert any(e["session_id"] == s.id for e in await repo.open_escalations())
     assert (await repo.store()).rule_version == 2  # ポリシーの変更で規則のバージョンが上がる
+
+
+async def test_agent_cannot_submit_before_guest_answers_read_back(env):
+    """AI が復唱と送信を同じ返答の中でしても、お客様の返事を受け取るまでは送らない（ZI-062）。"""
+    from app.agent.tools import build_tools
+
+    svc, repo, *_ = env
+    s = await svc.seat("5", 1, "ja")
+    await svc.declare(s.id, [{"guest_id": "g1"}])
+    heard = [1]
+    events = []
+
+    async def emit(e):
+        events.append(e)
+
+    tools = {t.__name__: t for t in build_tools(svc, s.id, "ja", emit, lambda: "t", lambda: heard[0])}
+    added = await tools["add_item"]("s_edamame", 1)
+    assert added["decision"] == "ok" and "note" in added
+    rb = await tools["read_back"]()
+    early = await tools["submit_order"](rb["confirm_token"])
+    assert early == {"ok": False, "reason": "not_confirmed_yet", "say": early["say"]}
+    assert await repo.orders_for(s.id) == []
+    heard[0] += 1  # お客様が「はい」と言った（すぐ後の同じ呼び出しも通る）
+    done = await tools["submit_order"](rb["confirm_token"])
+    assert done["ok"] is True

@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # Agent Platform の gemini-3.8-live は us / eu リージョンのみ（東京なし）
     live_location: str = "us-central1"
     live_voice: str = "Kore"
+    # 遅延の調整（None ならモデルの既定）：考える量の上限、話し終わりと判定する無音の長さ（ミリ秒）
+    live_thinking_budget: int | None = None
+    live_silence_ms: int | None = None
 
     # Firestore（ローカルはエミュレーター：FIRESTORE_EMULATOR_HOST を設定する）
     firestore_project: str = ""

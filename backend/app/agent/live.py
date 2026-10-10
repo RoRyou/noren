@@ -34,6 +34,8 @@ from app.services.table import TableService
 log = logging.getLogger("noren.live")
 
 IDLE_CLOSE_S = 20.0
+NUDGE_AFTER_S = 4.0
+TRACE = bool(__import__("os").environ.get("NOREN_LIVE_TRACE"))
 IN_RATE = 16000
 
 SendJson = Callable[[dict], Awaitable[None]]
@@ -60,8 +62,14 @@ class VoiceSession:
         self.turn = 0
         self.opened_at = 0.0
         self.lang = "ja"
-        self.metrics: dict = {"tool_calls": [], "first_audio_ms": [], "turns": 0}
+        self.metrics: dict = {"tool_calls": [], "first_audio_ms": [], "turns": 0, "nudges": 0}
         self._input_end: float | None = None
+        # 1 回の返答の中で：ツールを呼んだか・声を出したか・もう催促したか（ツールの後に黙る対策）
+        self._turn_tools = False
+        self._turn_spoke = False
+        self._nudged = False
+        self._watch: asyncio.Task | None = None
+        self.heard = 0  # お客様の発話・画面操作を受け取った回数
 
     def duration_s(self) -> float:
         """会話を開いていた秒数（費用の上限の計算に使う）。"""
@@ -95,7 +103,10 @@ class VoiceSession:
                 name="reception",
                 model=Gemini(model=settings.live_model, client_kwargs=_vertex_kwargs()),
                 instruction=instruction,
-                tools=build_tools(self.svc, self.session_id, self.lang, self.emit, self.correlation),
+                tools=build_tools(self.svc, self.session_id, self.lang, self.emit, self.correlation, lambda: self.heard),
+                generate_content_config=(
+                    types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_budget=settings.live_thinking_budget))
+                    if settings.live_thinking_budget is not None else None),
             )
         service = InMemorySessionService()
         runner = Runner(app_name="noren", agent=agent, session_service=service)
@@ -108,6 +119,10 @@ class VoiceSession:
                 voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.live_voice))),
             input_audio_transcription=types.AudioTranscriptionConfig(),
             output_audio_transcription=types.AudioTranscriptionConfig(),
+            realtime_input_config=(
+                types.RealtimeInputConfig(automatic_activity_detection=types.AutomaticActivityDetection(
+                    silence_duration_ms=settings.live_silence_ms))
+                if settings.live_silence_ms is not None else None),
         )
         self.opened_at = time.monotonic()
         self.task = asyncio.create_task(self._consume(runner, adk_session.id, run_config))
@@ -118,6 +133,7 @@ class VoiceSession:
         if self.closed.is_set():
             return
         self.closed.set()
+        self._cancel_watch()
         if self.idle_task:
             self.idle_task.cancel()
         if self.queue:
@@ -148,17 +164,46 @@ class VoiceSession:
         if not self.queue or self.closed.is_set():
             return
         self.turn += 1
+        self.heard += 1
         self._arm_idle()
         await self._on_user_final(text)
         self._input_end = time.monotonic()
+        self._new_turn()
         self.queue.send_content(types.Content(role="user", parts=[types.Part(text=text)]))
 
     def push_screen_action(self, text_ja: str) -> None:
         """お客様が画面で押した結果を会話に伝える（AI が続きを進められるように）。"""
         if self.queue and not self.closed.is_set():
+            self.heard += 1
             self._arm_idle()
             self._input_end = time.monotonic()
+            self._new_turn()
             self.queue.send_content(types.Content(role="user", parts=[types.Part(text=f"[画面操作] {text_ja}")]))
+
+    def _new_turn(self) -> None:
+        self._turn_tools = self._turn_spoke = self._nudged = False
+        self._cancel_watch()
+
+    async def _after_tool_turn(self) -> None:
+        """ツールの後の返答を待つ。3.8 Live はツールの後にいったん turn_complete を出し、それから話す。
+        まれに話さないまま終わるので、NUDGE_AFTER_S 秒たっても声がなければ 1 回だけ結果を伝えるよう促す。"""
+        try:
+            await asyncio.sleep(NUDGE_AFTER_S)
+            if not self._nudged and self.queue and not self.closed.is_set():
+                self._nudged = True
+                self.metrics["nudges"] += 1
+                log.info("silent after tools; nudging (%s)", self.correlation())
+                self.queue.send_content(types.Content(role="user", parts=[types.Part(
+                    text="[システム] 直前のツールの結果を、お客様に短く伝えてください。")]))
+                await asyncio.sleep(NUDGE_AFTER_S)
+            await self.send_json({"type": "turn_complete"})
+        except asyncio.CancelledError:
+            pass
+
+    def _cancel_watch(self) -> None:
+        if self._watch:
+            self._watch.cancel()
+            self._watch = None
 
     # --- 出力 -------------------------------------------------------------
     async def _consume(self, runner: Runner, adk_session_id: str, run_config: RunConfig) -> None:
@@ -167,15 +212,23 @@ class VoiceSession:
         try:
             async for ev in runner.run_live(user_id=self.session_id, session_id=adk_session_id,
                                             live_request_queue=self.queue, run_config=run_config):
+                if TRACE:
+                    log.info("ev %s fc=%s fr=%s audio=%s out=%s tc=%s partial=%s", self.correlation(),
+                             [f.name for f in ev.get_function_calls()], [f.name for f in ev.get_function_responses()],
+                             bool(ev.content and any(p.inline_data for p in ev.content.parts or [])),
+                             (ev.output_transcription.text[:30] if ev.output_transcription and ev.output_transcription.text else ""),
+                             ev.turn_complete, ev.partial)
                 if ev.error_code or ev.error_message:
                     await self.send_json({"type": "error", "message": f"{ev.error_code}: {ev.error_message}"})
                 if ev.input_transcription and ev.input_transcription.text:
+                    self.heard += 1
                     self._arm_idle()
                     if ev.partial:
                         user_partial += ev.input_transcription.text
                         await self.send_json({"type": "transcript", "role": "user", "text": user_partial, "final": False})
                     else:
                         self.turn += 1
+                        self._new_turn()
                         text = ev.input_transcription.text
                         user_partial = ""
                         await self.send_json({"type": "transcript", "role": "user", "text": text, "final": True})
@@ -191,19 +244,32 @@ class VoiceSession:
                         await self.svc.repo.append_turn(self.session_id, "ai", ev.output_transcription.text)
                 for fc in ev.get_function_calls():
                     self.metrics["tool_calls"].append(fc.name)
+                    self._turn_tools = True
+                    self._turn_spoke = False  # 見るのはツールの後に話したかどうか
+                    self._cancel_watch()
                 if ev.content and ev.content.parts:
                     for p in ev.content.parts:
                         if p.inline_data and p.inline_data.data and (p.inline_data.mime_type or "").startswith("audio"):
                             if self._input_end is not None:
                                 self.metrics["first_audio_ms"].append(round((time.monotonic() - self._input_end) * 1000))
                                 self._input_end = None
+                            self._turn_spoke = True
+                            self._cancel_watch()
                             await self.send_audio(p.inline_data.data)
                 if ev.interrupted:
                     await self.send_json({"type": "interrupted"})
                 if ev.turn_complete:
                     self.metrics["turns"] += 1
-                    await self.send_json({"type": "turn_complete"})
+                    if ai_partial:  # 確定の文字起こしが来ないまま区切られた → 途中までの文字を確定として送る
+                        await self.send_json({"type": "transcript", "role": "ai", "text": ai_partial, "final": True})
+                        await self.svc.repo.append_turn(self.session_id, "ai", ai_partial)
+                        ai_partial = ""
                     self._arm_idle()
+                    self._cancel_watch()
+                    if self._turn_tools and not self._turn_spoke:  # ツールの直後：この後に話すはず（まだ返答の途中）
+                        self._watch = asyncio.create_task(self._after_tool_turn())
+                    else:
+                        await self.send_json({"type": "turn_complete"})
         except asyncio.CancelledError:
             pass
         except Exception as e:  # 会話は閉じても、画面のタッチ操作は続けられる
