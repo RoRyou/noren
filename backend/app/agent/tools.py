@@ -141,6 +141,9 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
                 await emit({"type": "blocked", "item_id": item_id, "check": out, "alternatives": alts})
             if check.ok:
                 await emit({"type": "cart", "cart": [l.model_dump() for l in s.cart]})
+            menu = await svc.repo.menu()
+            out["cart_now"] = [f"{menu[l.item_id].name.ja}×{l.qty}" + (f"（{l.for_guest}）" if l.for_guest else "")
+                               for l in s.cart if l.item_id in menu]
             return out
         return await run("add_item", {"item_id": item_id, "qty": qty, "for_guest": for_guest}, body)
 

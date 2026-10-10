@@ -58,6 +58,9 @@ class Run:
         self.latencies: list[int] = []
         self.inbox: asyncio.Queue = asyncio.Queue()
         self.escalations: list[dict] = []
+        self.tapped: set[str] = set()  # 同じ料理は 1 回だけ押す（人はカートに入ったのを見ればもう押さない）
+        self.silent_turns = 0
+        self.harness_error = False
 
     async def setup(self) -> None:
         s = self.s
@@ -114,6 +117,10 @@ class Run:
         done = []
         for ev in events:
             e = ev.get("event")
+            if e == "ask_guest" and ev.get("item_id") in self.tapped:
+                continue
+            if e == "ask_guest" and ev.get("item_id"):
+                self.tapped.add(ev["item_id"])
             if e == "ask_guest" and ev.get("item_id") and ev["item_id"] in taps.get("guests_for_item", {}):
                 gs = taps["guests_for_item"][ev["item_id"]]  # 一人一つずつ（お酒など）
                 r = (await self.http.post(f"/api/tables/{self.sid}/cart", json={"item_id": ev["item_id"], "for_guests": gs})).json()
@@ -150,17 +157,25 @@ class Run:
         async with websockets.connect(url, max_size=None) as ws:
             recv = asyncio.create_task(self.receiver(ws))
             for _ in range(MAX_TURNS):
-                try:
-                    line = await asyncio.wait_for(guest_says(self.s, self.history), 30)
-                except asyncio.TimeoutError:
-                    self.history.append({"role": "screen", "text": "(お客様役の AI が 30 秒応答せず終了)"})
+                line = None
+                for _attempt in range(2):  # お客様役の AI（global エンドポイント）が詰まったら 1 回だけやり直す
+                    try:
+                        line = await asyncio.wait_for(guest_says(self.s, self.history), 60)
+                        break
+                    except asyncio.TimeoutError:
+                        continue
+                if line is None:
+                    self.history.append({"role": "screen", "text": "(お客様役の AI が応答せず終了)"})
+                    self.harness_error = True
                     break
                 if line.startswith("[END]") or not line:
                     break
                 self.history.append({"role": "guest", "text": line})
                 await ws.send(json.dumps({"type": "text", "text": line}))
-                turn = await self.ai_turn(time.monotonic())
+                turn = await self.ai_turn(time.monotonic(), timeout=60)
                 self.ui += turn["events"]
+                if not turn["text"]:
+                    self.silent_turns += 1
                 self.history.append({"role": "ai", "text": turn["text"]})
                 taps = await self.tap(turn["events"])
                 loops = 0
@@ -249,7 +264,8 @@ async def main() -> int:
             verdict = await run.judge()
         except Exception as e:  # 1 件の失敗で全体を止めない
             meta, verdict = {"seconds": 0}, {"pass": False, "error": str(e)[:200], "checks": {}}
-        res = {"id": s["id"], "set": s["set"], **meta, **verdict, "latencies_ms": run.latencies, "history": run.history}
+        res = {"id": s["id"], "set": s["set"], **meta, **verdict, "latencies_ms": run.latencies, "history": run.history,
+               "silent_turns": run.silent_turns, "harness_error": run.harness_error}
         results.append(res)
         print(f"{s['id']} {'PASS' if verdict['pass'] else 'FAIL'} {verdict.get('checks')} ordered={verdict.get('ordered')} "
               f"esc={verdict.get('escalations')} {meta['seconds']}s", flush=True)
@@ -264,6 +280,8 @@ async def main() -> int:
         "first_audio_ms_median": statistics.median(lat) if lat else None,
         "first_audio_ms_p90": sorted(lat)[int(len(lat) * 0.9) - 1] if len(lat) >= 10 else None,
         "seconds_per_table_median": statistics.median([r["seconds"] for r in results]) if results else None,
+        "silent_ai_turns": sum(r.get("silent_turns", 0) for r in results),
+        "harness_errors": [r["id"] for r in results if r.get("harness_error")],
     }
     (out / "report.json").write_text(json.dumps({"summary": summary, "results": results}, ensure_ascii=False, indent=2))
     print("\nsummary:", json.dumps(summary, ensure_ascii=False), "\nreport:", out / "report.json")

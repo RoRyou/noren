@@ -131,8 +131,11 @@ async def add_cart(sid: str, body: CartIn, ctx: Ctx = Depends(http_ctx)) -> dict
            "need_guest": f"{name}はどなたの分か選ぶ必要があります。",
            "rejected": f"{name}は追加できませんでした（{'、'.join(check.reasons)}）。",
            "need_staff": f"{name}は店員の確認が必要です（{'、'.join(check.reasons)}）。"}.get(check.decision.value, "")
+    menu = await ctx.repo.menu()
+    now = "、".join(f"{menu[l.item_id].name.ja}×{l.qty}" + (f"（{l.for_guest}）" if l.for_guest else "")
+                   for l in session.cart if l.item_id in menu) or "なし"
     hub.publish(ctx.repo.store_id, f"table:{sid}", {"type": "ui", "event": "cart", "cart": out["cart"], "source": "touch",
-                                                     "say_ja": say})
+                                                     "say_ja": f"{say} いまのカート：{now}"})
     return out
 
 
