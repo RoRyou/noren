@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
@@ -16,6 +16,8 @@ from app.domain.models import LineStatus
 from app.domain.orders import TransitionError
 from app.realtime.hub import hub
 from app.store.repo import JST
+
+ACTIVE_STORE_H = 12  # この時間内にテーブルが開いた店だけを見回る
 
 router = APIRouter(prefix="/api")
 
@@ -349,8 +351,8 @@ async def run_task(name: str, request: Request) -> dict:
 
 @router.post("/tasks/sweep_all")
 async def sweep_all(request: Request) -> dict:
-    """Cloud Scheduler から定期的に呼ぶ：送信待ちの outbox がある店をすべて処理し、
-    営業中のテーブルがある店には時間で決まる通知（ラストオーダー前・提供が遅い）を出す。"""
+    """Cloud Scheduler から定期的に呼ぶ：最近テーブルが開いた店を回り、送信待ちの outbox を処理し、
+    時間で決まる通知（ラストオーダー前・提供が遅い）を出す。コレクショングループの索引は使わない。"""
     from google.cloud.firestore_v1.base_query import FieldFilter
 
     from app.api.context import client, ctx_for, dispatcher
@@ -358,18 +360,11 @@ async def sweep_all(request: Request) -> dict:
 
     if not verify_oidc(request.headers.get("authorization")):
         raise HTTPException(403, "forbidden")
-    stores = set()
-    async for snap in client().collection_group("outbox").where(filter=FieldFilter("status", "==", "pending")).stream():
-        stores.add(snap.reference.parent.parent.id)
-    total = 0
-    for store_id in stores:
-        total += await dispatcher.dispatch(ctx_for(store_id).repo)
-    open_stores = set()
-    async for snap in client().collection_group("sessions").where(
-            filter=FieldFilter("status", "in", ["dining", "awaiting_prepay", "billing"])).stream():
-        open_stores.add(snap.reference.parent.parent.id)
-    timed = 0
-    for store_id in open_stores:
-        c = ctx_for(store_id)
+    cutoff = (datetime.now(JST) - timedelta(hours=ACTIVE_STORE_H)).isoformat(timespec="seconds")
+    stores, dispatched, timed = 0, 0, 0
+    async for snap in client().collection("stores").where(filter=FieldFilter("last_active", ">=", cutoff)).stream():
+        c = ctx_for(snap.id)
+        stores += 1
+        dispatched += await dispatcher.dispatch(c.repo)
         timed += await dispatcher.tick(c.repo, c.svc.clock(), datetime.now(JST))
-    return {"stores": len(stores), "dispatched": total, "timed_notifications": timed}
+    return {"stores": stores, "dispatched": dispatched, "timed_notifications": timed}

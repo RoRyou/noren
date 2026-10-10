@@ -255,3 +255,22 @@ async def test_agent_cannot_submit_before_guest_answers_read_back(env):
     heard[0] += 1  # お客様が「はい」と言った（すぐ後の同じ呼び出しも通る）
     done = await tools["submit_order"](rb["confirm_token"])
     assert done["ok"] is True
+
+
+async def test_tick_notifies_overdue_once(env):
+    """見回り：注文から 20 分たって出ていない料理を店員に 1 回だけ知らせる。"""
+    from datetime import datetime, timedelta
+
+    from app.store.repo import JST
+
+    svc, repo, hub, dispatcher, _ = env
+    s = await svc.seat("6", 1, "ja")
+    await svc.declare(s.id, [{"guest_id": "g1"}])
+    await svc.add_to_cart(s.id, "s_edamame", 1, "g1")
+    rb = await svc.read_back(s.id)
+    await svc.submit(s.id, rb["confirm_token"], idempotency_key="k1")
+    later = datetime.now(JST) + timedelta(minutes=25)
+    assert await dispatcher.tick(repo, "19:25", later) == 1
+    assert await dispatcher.tick(repo, "19:26", later) == 0  # 同じ料理は 1 回だけ
+    staff = await repo.unacked_notifications("staff")
+    assert [n["kind"] for n in staff if n["kind"] == "overdue"] == ["overdue"]

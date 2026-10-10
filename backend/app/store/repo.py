@@ -66,7 +66,7 @@ class Repo:
 
     async def seed(self, store: StoreSettings, items: dict[str, MenuItem], knowledge: list[dict], extra: dict | None = None) -> None:
         batch = self.db.batch()
-        batch.set(self.root, {**_dump(store), **(extra or {})})
+        batch.set(self.root, {**_dump(store), **(extra or {}), "last_active": now_iso()})
         for item in items.values():
             batch.set(self.col("menu_items").document(item.id), _dump(item))
         for k in knowledge:
@@ -111,6 +111,7 @@ class Repo:
         if store.otoshi_price and store.otoshi_label:
             session.charges.append(otoshi_charge(store.otoshi_price, party_size, store.otoshi_label))
         await self.col("sessions").document(session.id).set(_dump(session))
+        await self.root.set({"last_active": now_iso()}, merge=True)  # 見回りの対象にする（営業中の店だけを回る）
         return session
 
     async def session(self, session_id: str) -> TableSession:
