@@ -19,7 +19,7 @@ LAST_ORDER_NOTICE_MIN = 15
 @dataclass
 class Notification:
     target: str  # "table:<session_id>" か "staff"
-    kind: str  # sold_out / rejected / last_order / overdue / escalation_repeat / escalation_all
+    kind: str  # 通知の種類：sold_out / rejected / last_order / overdue / escalation_repeat / escalation_all
     payload: dict = field(default_factory=dict)
     dedupe_key: str = ""  # 同じ通知を二度出さないためのキー（イベント ID から作る）
 

@@ -76,7 +76,7 @@ class Guest(BaseModel):
     id: str  # g1, g2, ...
     label: str  # 画面表示（「ゲスト 1」や名前）
     allergies: list[str] = []  # アレルゲンコード
-    diets: list[str] = []  # halal / vegetarian / vegan / gluten_free / no_pork / no_beef / no_alcohol / no_five_pungent
+    diets: list[str] = []  # 食事制限のコード：halal / vegetarian / vegan / gluten_free / no_pork / no_beef / no_alcohol / no_five_pungent
     severe: bool = False  # 重いアレルギー（自己申告） → 強制的に店員へ
     declared: bool = False  # 入座時の申告を済ませたか（「なし」も申告済み）
     alcohol: AlcoholCheck | None = None
