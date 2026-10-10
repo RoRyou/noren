@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # 遅延の調整（None ならモデルの既定）：考える量の上限、話し終わりと判定する無音の長さ（ミリ秒）
     live_thinking_budget: int | None = None
     live_silence_ms: int | None = None
+
+    @field_validator("live_thinking_budget", "live_silence_ms", mode="before")
+    @classmethod
+    def _empty_is_none(cls, v):
+        return None if v == "" else v
 
     # Firestore（ローカルはエミュレーター：FIRESTORE_EMULATOR_HOST を設定する）
     firestore_project: str = ""
