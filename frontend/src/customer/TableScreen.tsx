@@ -33,6 +33,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [text, setText] = useState("");
   const [banner, setBanner] = useState("");
+  const [offline, setOffline] = useState(false);
   const [staffComing, setStaffComing] = useState(false);
   const [mode, setMode] = useState<"reception" | "interpret">("reception");
   const ws = useRef<WebSocket | null>(null);
@@ -55,10 +56,32 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
     void api.menu(sid).then(setMenu);
     void api.recommend(sid).then(setRecs);
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    const sock = new WebSocket(`${proto}://${location.host}/ws/tables/${sid}`);
-    sock.binaryType = "arraybuffer";
-    sock.onmessage = (e) => (typeof e.data === "string" ? onMessage(JSON.parse(e.data)) : player.current.play(e.data));
-    ws.current = sock;
+    let alive = true;
+    let retry = 0;
+    let timer: number | undefined;
+    // 切れたらつなぎ直す（1, 2, 4… 最大 10 秒）。カートと注文はサーバーから取り直し、切断中の通知はサーバーが送り直す
+    const connect = () => {
+      const sock = new WebSocket(`${proto}://${location.host}/ws/tables/${sid}`);
+      sock.binaryType = "arraybuffer";
+      sock.onmessage = (e) => (typeof e.data === "string" ? onMessage(JSON.parse(e.data)) : player.current.play(e.data));
+      sock.onopen = () => {
+        if (retry > 0) {
+          setOffline(false);
+          void refresh();
+        }
+        retry = 0;
+      };
+      sock.onclose = () => {
+        if (!alive) return;
+        mic.current.stop();
+        player.current.stop();
+        if (voiceRef.current !== "closed") setVoiceState("closed");
+        setOffline(true);
+        timer = window.setTimeout(connect, Math.min(1000 * 2 ** retry++, 10000));
+      };
+      ws.current = sock;
+    };
+    connect();
     player.current.onBusy = () => {
       mic.current.muted = true; // AI が話している間は送らない
       setVoiceState("speaking");
@@ -68,7 +91,9 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
       if (voiceRef.current === "speaking") setVoiceState("listening");
     };
     return () => {
-      sock.close();
+      alive = false;
+      window.clearTimeout(timer);
+      ws.current?.close();
       mic.current.stop();
     };
   }, [sid]);
@@ -364,6 +389,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
             ))}
           </div>
         )}
+        {offline && <div className="banner warn">{t(lang, "reconnecting")}</div>}
         {banner && <div className="banner" onClick={() => setBanner("")}>{banner}</div>}
         <div className="cards">
           {tab === "recommend" && [...spot, ...recs.filter((r) => !spot.some((s) => s.item_id === r.item_id))].map((c) => (

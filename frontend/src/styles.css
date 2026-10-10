@@ -158,3 +158,4 @@ input[type="text"], input:not([type]) { font: inherit; padding: 10px 12px; borde
 .policy-row span { min-width: 260px; }
 .cross-sell { display: flex; gap: 10px; align-items: center; padding: 8px 14px; background: #fdf0e6; border-top: 1px solid #f3d9c4; }
 .cross-sell button { margin-left: auto; background: var(--accent); color: #fff; border: none; }
+.banner.warn { background: #fdecea; color: var(--ng); cursor: default; }
