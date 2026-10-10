@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     live_location: str = "us-central1"
     live_voice: str = "Kore"
     # 遅延の調整（None ならモデルの既定）：考える量の上限、話し終わりと判定する無音の長さ（ミリ秒）
+    # 考える量は、許可リストにないプロジェクトでは変えられない（1007 "not allowlisted"、10/11 確認）
     live_thinking_budget: int | None = None
     live_silence_ms: int | None = None
 

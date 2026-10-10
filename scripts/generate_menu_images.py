@@ -43,16 +43,16 @@ HINTS = {  # 料理の見た目の補足（量や器）
     "s_dashimaki": "a rolled Japanese dashi omelette sliced on a plate with grated daikon",
     "f_karaage": "five pieces of Japanese fried chicken with a lemon wedge",
     "f_ebi_ten": "three shrimp tempura with tentsuyu dipping sauce",
-    "f_fries": "a plate of french fries",
+    "f_fries": "a plate of plain salted french fries, no dipping sauce",
     "f_agedashi": "deep-fried tofu in dashi broth topped with grated daikon and green onion",
-    "g_yakitori": "five salted grilled chicken yakitori skewers",
+    "g_yakitori": "five salted grilled chicken yakitori skewers, chicken only (no leek, no lemon)",
     "g_saba": "a salt-grilled mackerel fillet with grated daikon",
     "g_buta_kimchi": "stir-fried pork and kimchi on a plate",
     "g_mapo": "a bowl of spicy mapo tofu",
     "g_maguro": "tuna sashimi slices with wasabi and shiso leaf",
-    "r_ochazuke": "a bowl of salmon ochazuke (rice with green tea and nori)",
-    "r_onigiri": "two grilled rice balls brushed with soy sauce",
-    "ds_matcha_ice": "a scoop of matcha green tea ice cream in a small bowl",
+    "r_ochazuke": "a bowl of rice topped with a piece of grilled salmon and nori, with green tea poured over",
+    "r_onigiri": "one grilled triangular rice ball brushed with soy sauce",
+    "ds_matcha_ice": "a single plain scoop of matcha green tea ice cream in a small bowl, nothing else",
 }
 
 
@@ -69,7 +69,9 @@ def main() -> int:
         dest = OUT / f"{item.id}.jpg"
         if dest.exists() and not args.force:
             continue
-        prompt = f"{STYLE} The dish: {HINTS.get(item.id, item.name.en)} ({item.name.ja})."
+        # 店主が答えた食材にないものを描かない（写真に写った具がアレルギーの判断を誤らせないように）
+        prompt = (f"{STYLE} The dish: {HINTS.get(item.id, item.name.en)} ({item.name.ja}). "
+                  f"Show only these ingredients: {'、'.join(item.ingredients)}. No other toppings, garnish or side dishes.")
         r = None
         for attempt in range(6):  # 試用アカウントは画像モデルの 1 分あたりの上限が小さい → 429 なら待って再試行
             try:
