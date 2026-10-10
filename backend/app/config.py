@@ -1,4 +1,4 @@
-"""Settings loaded from environment (.env locally, Secret Manager / env vars on Cloud Run)."""
+"""Settings loaded from environment (.env locally, env vars on Cloud Run)."""
 
 from pathlib import Path
 
