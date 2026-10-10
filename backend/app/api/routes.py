@@ -190,7 +190,7 @@ class LineStatusIn(BaseModel):
 
 
 class EscalationIn(BaseModel):
-    status: str  # acknowledged / in_progress / resolved
+    status: str  # 状態：acknowledged / in_progress / resolved
     handler: str = "店員"
 
 

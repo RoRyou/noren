@@ -21,3 +21,6 @@ logs/
 
 # internal planning notes (not for reviewers)
 notes/
+
+# ビルドの中間ファイル
+*.tsbuildinfo
