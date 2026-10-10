@@ -11,7 +11,7 @@ from app.domain import escalation as esc_rules
 from app.domain.cart import CartCheck, Decision, cart_token, check_add, recheck_cart
 from app.domain.dietary import describe_reasons, judge_table
 from app.domain.models import AlcoholCheck, CartLine, LineStatus, MenuItem, SessionStatus, TableSession
-from app.domain.orders import can_customer_cancel, make_bill
+from app.domain.orders import can_customer_cancel, make_bill, unit_price
 from app.domain.recommend import alternatives, recommend
 from app.domain.table_state import derive_phase
 from app.store.dispatcher import Dispatcher
@@ -92,7 +92,7 @@ class TableService:
             existing = next((l for l in session.cart if l.item_id == item_id and l.options == (options or {})
                              and (l.for_guest == for_guest or (for_guest is None and l.for_guest is None))), None)
             total = qty + (existing.qty if existing else 0)
-            check = check_add(session, store, item, total, for_guest, clock)
+            check = check_add(session, store, item, total, for_guest, clock, options)
             if check.ok:
                 if existing:
                     existing.qty = total
@@ -152,7 +152,9 @@ class TableService:
             item = items[l.item_id]
             lines.append({
                 "line_id": l.line_id, "item_id": l.item_id, "name": item.name.get(session.lang), "qty": l.qty,
-                "for_guest": l.for_guest, "price": item.price, "amount": item.price * l.qty,
+                "for_guest": l.for_guest, "price": unit_price(item, l.options), "amount": unit_price(item, l.options) * l.qty,
+                "options": {g.key: next(c.label.get(session.lang) for c in g.choices if c.key == l.options.get(g.key, g.default))
+                            for g in item.option_groups},
                 "allergens": item.allergens, "cross_contact": item.cross_contact,
                 "allergen_status": item.allergen_status.value,
             })
@@ -236,6 +238,9 @@ class TableService:
             "how_to_eat": item.how_to_eat.get(lang) if item.how_to_eat else "",
             "portion": item.portion.get(lang) if item.portion else "",
             "allergens": item.allergens, "cross_contact": item.cross_contact, "taste_tags": item.taste_tags,
+            "options": [{"key": g.key, "label": g.label.get(lang), "default": g.default,
+                         "choices": [{"key": c.key, "label": c.label.get(lang), "price_delta": c.price_delta} for c in g.choices]}
+                        for g in item.option_groups],
             "allergen_status": item.allergen_status.value,
             "marks": {gid: {"mark": v.verdict.mark, "reasons": describe_reasons(v.reasons, "ja" if lang == "ja" else "en")}
                       for gid, v in verdicts.items()},

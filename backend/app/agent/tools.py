@@ -42,6 +42,9 @@ def _brief(card: dict, lang: str) -> dict:
         **({"portion": card["portion"]} if card.get("portion") else {}),
         **({"how_to_eat": card["how_to_eat"]} if card.get("how_to_eat") else {}),
         **({"note": card["description"]} if card.get("description") else {}),
+        **({"options": {o["key"]: {"label": o["label"], "choices": {c["key"]: f"{c['label']}" + (f" +{c['price_delta']}円" if c["price_delta"] else "")
+                                                                   for c in o["choices"]}, "default": o["default"]}
+                        for o in card["options"]}} if card.get("options") else {}),
     }
 
 
@@ -123,13 +126,15 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             return {"ok": True, "guest": s.guest(guest_id).model_dump(), "escalated": severe}
         return await run("set_dietary_profile", {"guest_id": guest_id, "allergies": allergies, "diets": diets, "severe": severe}, body)
 
-    async def add_item(item_id: str, qty: int = 1, for_guest: str = "") -> dict:
-        """注文：カートに追加する。結果の decision に従う：ok / need_guest（画面でゲストを選んでもらう）/
+    async def add_item(item_id: str, qty: int = 1, for_guest: str = "", options: list[str] | None = None) -> dict:
+        """注文：カートに追加する。options は料理の選択肢を "グループ=選択肢" の形で（例：["size=large"]）。
+        選ばなければ既定の選択肢になる。結果の decision に従う：ok / need_guest（画面でゲストを選んでもらう）/
         need_alcohol_check（画面で 20 歳以上・運転しないかを選んでもらう）/ need_staff（△？ のため店員の確認が必要）/
         need_declaration（申告がまだ）/ rejected（理由と代わりの料理 alternatives を伝える）。"""
         async def body():
-            check, s = await svc.add_to_cart(session_id, item_id, qty, for_guest or None, actor="reception_agent",
-                                             correlation_id=correlation())
+            opts = dict(o.split("=", 1) for o in (options or []) if "=" in o)
+            check, s = await svc.add_to_cart(session_id, item_id, qty, for_guest or None, opts or None,
+                                             actor="reception_agent", correlation_id=correlation())
             out = check.to_dict()
             if check.decision == Decision.need_guest:
                 await emit({"type": "ask_guest", "purpose": "item", "item_id": item_id, "qty": qty, "verdicts": out["verdicts"]})
@@ -145,7 +150,7 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             out["cart_now"] = [f"{menu[l.item_id].name.ja}×{l.qty}" + (f"（{l.for_guest}）" if l.for_guest else "")
                                for l in s.cart if l.item_id in menu]
             return out
-        return await run("add_item", {"item_id": item_id, "qty": qty, "for_guest": for_guest}, body)
+        return await run("add_item", {"item_id": item_id, "qty": qty, "for_guest": for_guest, "options": options or []}, body)
 
     async def update_item(line_id: str, qty: int) -> dict:
         """注文：カートの数量を変える（0 で削除）。"""

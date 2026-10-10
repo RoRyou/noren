@@ -9,7 +9,7 @@ import uuid
 
 from app.agent import menu_import
 from app.domain.allergens import INGREDIENTS, convert_ingredients
-from app.domain.models import AllergenStatus, Localized, MenuItem
+from app.domain.models import AllergenStatus, Localized, MenuItem, OptionChoice, OptionGroup
 from app.store.repo import Repo, now_iso
 
 # 業態ごとの初期設定（K1）
@@ -32,18 +32,26 @@ class OwnerService:
     async def import_photo(self, image: bytes, mime: str) -> dict:
         """1) 書き写し：下書き（未公開・アレルギー情報は未確認）を作る。"""
         result = await menu_import.transcribe(image, mime)
+        groups: dict[str, list[OptionGroup]] = {}
+        for i, o in enumerate(result.options):  # 選択肢は、対象の分類の料理すべてに付ける
+            choices = [OptionChoice(key=f"c{j}", label=Localized(ja=c.label_ja, en=c.label_en), price_delta=c.price_delta)
+                       for j, c in enumerate(o.choices)]
+            if choices:
+                groups.setdefault(o.applies_to, []).append(
+                    OptionGroup(key=f"o{i}", label=Localized(ja=o.label_ja, en=o.label_en), choices=choices, default="c0"))
         drafts = []
         for t in result.items:
             item = MenuItem(
                 id=f"m_{uuid.uuid4().hex[:8]}", name=Localized(ja=t.name_ja), price=t.price or 0,
                 category=t.category, published=False, allergen_status=AllergenStatus.unconfirmed,
-                photo_url="", photo_is_generated=True,
+                photo_url="", photo_is_generated=True, option_groups=groups.get(t.category, []),
             )
             await self.repo.col("menu_items").document(item.id).set({**_dump(item), "draft": {"readable": t.readable,
                                                                                                "price_missing": t.price is None}})
             drafts.append({**_dump(item), "readable": t.readable})
         await self.repo.audit("menu_import_agent", "transcribe", {"count": len(drafts)}, "drafted")
-        return {"items": drafts, "business_type_guess": result.business_type_guess}
+        return {"items": drafts, "business_type_guess": result.business_type_guess,
+                "options": [o.model_dump() for o in result.options]}
 
     async def questions(self, item_id: str) -> dict:
         """2) 質問づくり：AI は食材を決めず、店主への質問と選択肢だけを返す。"""

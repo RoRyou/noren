@@ -22,6 +22,7 @@ export type Card = {
   allergen_status: string;
   marks: Record<string, Mark>;
   reasons?: string[];
+  options?: { key: string; label: string; default: string; choices: { key: string; label: string; price_delta: number }[] }[];
 };
 
 export type Guest = {
@@ -34,7 +35,7 @@ export type Guest = {
   alcohol: { adult: boolean; driving: boolean } | null;
 };
 
-export type CartLine = { line_id: string; item_id: string; qty: number; for_guest: string | null };
+export type CartLine = { line_id: string; item_id: string; qty: number; for_guest: string | null; options?: Record<string, string> };
 
 export type Check = {
   decision: "ok" | "need_declaration" | "need_guest" | "need_alcohol_check" | "need_staff" | "rejected";
@@ -65,8 +66,8 @@ export const api = {
     call<any>("POST", `/api/tables/${sid}/alcohol`, { guest_id, adult, driving }),
   menu: (sid: string, category?: string) => call<Card[]>("GET", `/api/tables/${sid}/menu${category ? `?category=${category}` : ""}`),
   recommend: (sid: string) => call<Card[]>("GET", `/api/tables/${sid}/recommend`),
-  addCart: (sid: string, item_id: string, qty: number, for_guest: string | null, for_guests?: string[]) =>
-    call<{ check: Check; checks?: Check[]; cart: CartLine[]; alternatives?: Card[] }>("POST", `/api/tables/${sid}/cart`, { item_id, qty, for_guest, for_guests }),
+  addCart: (sid: string, item_id: string, qty: number, for_guest: string | null, for_guests?: string[], options?: Record<string, string>) =>
+    call<{ check: Check; checks?: Check[]; cart: CartLine[]; alternatives?: Card[] }>("POST", `/api/tables/${sid}/cart`, { item_id, qty, for_guest, for_guests, options: options ?? {} }),
   updateCart: (sid: string, line_id: string, qty: number) => call<any>("PATCH", `/api/tables/${sid}/cart/${line_id}`, { qty }),
   readBack: (sid: string) => call<any>("POST", `/api/tables/${sid}/read_back`),
   submit: (sid: string, confirm_token: string) =>

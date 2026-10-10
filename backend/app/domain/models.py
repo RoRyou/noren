@@ -35,10 +35,26 @@ class AllergenStatus(StrEnum):
     confirmed = "confirmed"
 
 
+class OptionChoice(BaseModel):
+    key: str
+    label: Localized
+    price_delta: int = 0  # 追加料金（円、税込）
+
+
+class OptionGroup(BaseModel):
+    """料理の選択肢（麺の硬さ・大盛りなど）。アレルゲンが変わる選択肢は扱わない（既知の制限）。"""
+
+    key: str
+    label: Localized
+    choices: list[OptionChoice]
+    default: str  # 選ばなかったときの選択肢
+
+
 class MenuItem(BaseModel):
     id: str
     name: Localized
     price: int  # 税込（円）
+    option_groups: list[OptionGroup] = []
     category: str  # drink / snack / fried / grill / rice / dessert など
     description: Localized | None = None
     how_to_eat: Localized | None = None

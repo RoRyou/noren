@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from app.domain.allergens import convert_ingredients
-from app.domain.models import AllergenStatus, Localized, MenuItem, StoreSettings
+from app.domain.models import AllergenStatus, Localized, MenuItem, OptionChoice, OptionGroup, StoreSettings
 
 CONFIRMED_BY = "店主（デモ）"
 CONFIRMED_AT = "2026-10-10T10:00:00+09:00"
@@ -21,7 +21,10 @@ def L(ja: str, en: str, zh_hans: str = "", zh_hant: str = "", ko: str = "") -> L
 RAW: list[tuple] = [
     ("d_beer", L("生ビール", "Draft beer", "生啤酒", "生啤酒", "생맥주"), 600, "drink", ["ビール"],
      dict(is_alcohol=True, pairing_tags=["fried", "grill"], popularity=95,
-          portion=L("中ジョッキ（約 400 ml）", "Medium mug (about 400 ml)"))),
+          portion=L("中ジョッキ（約 400 ml）", "Medium mug (about 400 ml)"),
+          option_groups=[OptionGroup(key="size", label=L("サイズ", "Size", "杯型", "杯型", "사이즈"), default="medium", choices=[
+              OptionChoice(key="medium", label=L("中ジョッキ", "Medium", "中杯", "中杯", "중")),
+              OptionChoice(key="large", label=L("大ジョッキ", "Large", "大杯", "大杯", "대"), price_delta=200)])])),
     ("d_highball", L("ハイボール", "Highball", "嗨棒", "嗨棒", "하이볼"), 500, "drink", ["ウイスキー", "炭酸水"],
      dict(is_alcohol=True, taste_tags=["light"], pairing_tags=["fried"], popularity=80)),
     ("d_sake", L("日本酒（新潟・辛口）", "Sake (Niigata, dry)", "日本清酒（新潟·辣口）", "日本清酒（新潟·辛口）", "니혼슈（니가타·드라이）"),

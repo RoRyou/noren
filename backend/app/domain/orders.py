@@ -52,15 +52,36 @@ def aggregate_status(order: Order) -> str:
     return "accepted"
 
 
+def resolve_options(item: MenuItem, chosen: dict[str, str]) -> tuple[dict[str, str], int]:
+    """選択肢を確定する（選ばなかったものは既定値）。戻り値は（確定した選択, 追加料金の合計）。不正なら ValueError。"""
+    groups = {g.key: g for g in item.option_groups}
+    for key in chosen:
+        if key not in groups:
+            raise ValueError(f"invalid_option:{key}")
+    resolved, delta = {}, 0
+    for g in item.option_groups:
+        choice_key = chosen.get(g.key, g.default)
+        choice = next((c for c in g.choices if c.key == choice_key), None)
+        if choice is None:
+            raise ValueError(f"invalid_option:{g.key}")
+        resolved[g.key] = choice.key
+        delta += choice.price_delta
+    return resolved, delta
+
+
+def unit_price(item: MenuItem, chosen: dict[str, str]) -> int:
+    return item.price + resolve_options(item, chosen)[1]
+
+
 def build_lines(cart: list[CartLine], items: dict[str, MenuItem]) -> list[OrderLine]:
-    """カート → 注文明細（名前と価格はこの時点のスナップショット）。"""
+    """カート → 注文明細（名前と価格はこの時点のスナップショット。選択肢の追加料金を含む）。"""
     return [
         OrderLine(
             line_id=c.line_id,
             item_id=c.item_id,
             name=items[c.item_id].name,
             qty=c.qty,
-            unit_price=items[c.item_id].price,
+            unit_price=unit_price(items[c.item_id], c.options),
             for_guest=c.for_guest,
             options=c.options,
             is_alcohol=items[c.item_id].is_alcohol,

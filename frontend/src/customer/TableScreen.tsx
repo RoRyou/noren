@@ -14,6 +14,7 @@ type Sheet =
   | { kind: "readback"; data: any }
   | { kind: "bill"; data: any }
   | { kind: "declaration"; allergies: string[]; diets: string[] }
+  | { kind: "options"; item_id: string; qty: number }
   | null;
 
 export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
@@ -216,8 +217,15 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
   }
 
   // --- タッチでの追加（AI と同じチェックを通る） ---------------------------------
+  // 選択肢（サイズ・麺の硬さなど）を選んだ結果。どなたの分・お酒の確認のあとも引き継ぐ
+  const chosenOptions = useRef<Record<string, Record<string, string>>>({});
+  function startAdd(item_id: string) {
+    if ((cards[item_id]?.options ?? []).length > 0) setSheet({ kind: "options", item_id, qty: 1 });
+    else void addItem(item_id);
+  }
+
   async function addItem(item_id: string, qty = 1, for_guest: string | null = null) {
-    const r = await api.addCart(sid, item_id, qty, for_guest);
+    const r = await api.addCart(sid, item_id, qty, for_guest, undefined, chosenOptions.current[item_id]);
     handleCheck(item_id, qty, r.check, r.alternatives ?? []);
     setCart(r.cart);
   }
@@ -241,7 +249,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
   // 一人一つずつ追加し、お酒の確認が必要な人を順番に聞く
   const [alcoholQueue, setAlcoholQueue] = useState<{ item_id: string; guests: string[] } | null>(null);
   async function addForGuests(item_id: string, ids: string[]) {
-    const r = await api.addCart(sid, item_id, 1, null, ids);
+    const r = await api.addCart(sid, item_id, 1, null, ids, chosenOptions.current[item_id]);
     setCart(r.cart);
     const pending = (r.checks ?? [r.check]).filter((c) => c.decision === "need_alcohol_check").map((c) => c.for_guest!);
     if (pending.length) {
@@ -348,15 +356,19 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
         {banner && <div className="banner" onClick={() => setBanner("")}>{banner}</div>}
         <div className="cards">
           {tab === "recommend" && [...spot, ...recs.filter((r) => !spot.some((s) => s.item_id === r.item_id))].map((c) => (
-            <ItemCard key={c.item_id} c={c} lang={lang} guests={guests} onAdd={() => addItem(c.item_id)} />
+            <ItemCard key={c.item_id} c={c} lang={lang} guests={guests} onAdd={() => startAdd(c.item_id)} />
           ))}
-          {tab === "menu" && menu.map((c) => <ItemCard key={c.item_id} c={c} lang={lang} guests={guests} onAdd={() => addItem(c.item_id)} />)}
+          {tab === "menu" && menu.map((c) => <ItemCard key={c.item_id} c={c} lang={lang} guests={guests} onAdd={() => startAdd(c.item_id)} />)}
           {tab === "order" && (
             <div className="order-tab">
               <h3>{t(lang, "cart")}</h3>
               {cart.map((l) => (
                 <div key={l.line_id} className="cart-line">
                   <span>{cards[l.item_id]?.name ?? l.item_id}</span>
+                  {Object.entries(l.options ?? {}).map(([k, v]) => {
+                    const g = cards[l.item_id]?.options?.find((o) => o.key === k);
+                    return <span key={k} className="small">{g?.choices.find((c) => c.key === v)?.label ?? v}</span>;
+                  })}
                   {l.for_guest && <span className="who">{guestLabel(l.for_guest)}</span>}
                   <span className="qty">
                     <button onClick={async () => { const r = await api.updateCart(sid, l.line_id, l.qty - 1); setCart(r.cart); }}>−</button>
@@ -389,6 +401,9 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
       {sheet && (
         <div className="sheet-backdrop" onClick={() => setSheet(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            {sheet.kind === "options" && (
+              <OptionsSheet card={cards[sheet.item_id]} onDone={(opts) => { chosenOptions.current[sheet.item_id] = opts; void addItem(sheet.item_id, sheet.qty); }} />
+            )}
             {sheet.kind === "guest" && sheet.multi && (
               <MultiGuest lang={lang} guests={guests} qty={sheet.qty} title={cards[sheet.item_id]?.name ?? ""} onDone={(ids) => addForGuests(sheet.item_id, ids)} />
             )}
@@ -482,6 +497,30 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
       )}
       <div className="demo-clock">{t(lang, "demoClock")}</div>
     </div>
+  );
+}
+
+function OptionsSheet({ card, onDone }: { card?: Card; onDone: (opts: Record<string, string>) => void }) {
+  const [sel, setSel] = useState<Record<string, string>>(() => Object.fromEntries((card?.options ?? []).map((g) => [g.key, g.default])));
+  if (!card) return null;
+  const delta = (card.options ?? []).reduce((s, g) => s + (g.choices.find((c) => c.key === sel[g.key])?.price_delta ?? 0), 0);
+  return (
+    <>
+      <h3>{card.name}</h3>
+      {(card.options ?? []).map((g) => (
+        <div key={g.key}>
+          <p>{g.label}</p>
+          <div className="chips">
+            {g.choices.map((c) => (
+              <button key={c.key} className={sel[g.key] === c.key ? "chip big on" : "chip big"} onClick={() => setSel((s) => ({ ...s, [g.key]: c.key }))}>
+                {c.label}{c.price_delta ? ` +¥${c.price_delta}` : ""}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <button className="primary" onClick={() => onDone(sel)}>OK · ¥{(card.price + delta).toLocaleString()}</button>
+    </>
   );
 }
 

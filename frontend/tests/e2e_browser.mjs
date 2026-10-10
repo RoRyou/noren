@@ -84,6 +84,9 @@ try {
 
   // 5) 生ビール → Guest 2 → お酒の確認 → 追加
   await page.locator(".card", { hasText: "Draft beer" }).locator("button.add").click();
+  await page.waitForSelector(".sheet h3:has-text('Draft beer')");
+  check("生ビールはサイズを選べる（大 +¥200）", (await page.locator(".sheet").textContent()).includes("+¥200"));
+  await page.locator(".sheet button.primary", { hasText: "OK" }).click(); // 中ジョッキのまま
   await page.locator(".sheet .chip", { hasText: "Guest 2" }).click();
   await page.waitForSelector(".sheet h3:has-text(\"Before we serve alcohol\")");
   await shot("06_alcohol");

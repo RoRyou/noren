@@ -282,3 +282,16 @@ def test_taste_hint_moves_spicy_up():
     s = session(guest("g1"))
     recs = recommend(MENU, s, Phase.ordering, taste=["spicy"], category="grill", limit=2)
     assert {r.item_id for r in recs} <= {"g_mapo", "g_buta_kimchi"}
+
+
+def test_options_price_and_validation():
+    from app.domain.orders import unit_price
+
+    beer = MENU["d_beer"]
+    assert unit_price(beer, {}) == 600  # 既定は中ジョッキ
+    assert unit_price(beer, {"size": "large"}) == 800
+    s = session(guest("g1", alcohol=AlcoholCheck(adult=True, driving=False)))
+    assert check_add(s, STORE, beer, 1, None, options={"size": "huge"}).reasons == ["invalid_option"]
+    assert check_add(s, STORE, beer, 1, None, options={"size": "large"}).ok
+    lines = build_lines([CartLine(line_id="l1", item_id="d_beer", qty=2, options={"size": "large"})], MENU)
+    assert lines[0].unit_price == 800

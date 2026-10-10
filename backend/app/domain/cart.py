@@ -59,6 +59,7 @@ def check_add(
     qty: int,
     for_guest: str | None,
     now_hhmm: str | None = None,
+    options: dict[str, str] | None = None,
 ) -> CartCheck:
     """1 行追加（または数量変更）してよいか。"""
     if session.status in (SessionStatus.billing, SessionStatus.closed):
@@ -73,6 +74,13 @@ def check_add(
         return CartCheck(Decision.rejected, ["not_enough_stock"])
     if qty < 1 or qty > store.max_qty_per_line:
         return CartCheck(Decision.rejected, ["qty_limit"])
+    if options:
+        from app.domain.orders import resolve_options
+
+        try:
+            resolve_options(item, options)
+        except ValueError:
+            return CartCheck(Decision.rejected, ["invalid_option"])
     if any(not g.declared for g in session.guests):
         return CartCheck(Decision.need_declaration, ["undeclared_guest"])
 
@@ -120,7 +128,7 @@ def recheck_cart(
         if item is None:
             problems.append((line, CartCheck(Decision.rejected, ["not_available"])))
             continue
-        result = check_add(session, store, item, line.qty, line.for_guest, now_hhmm)
+        result = check_add(session, store, item, line.qty, line.for_guest, now_hhmm, line.options)
         if not result.ok:
             problems.append((line, result))
     return problems

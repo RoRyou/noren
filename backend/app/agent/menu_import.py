@@ -26,8 +26,22 @@ class TranscribedItem(BaseModel):
     readable: bool = Field(description="文字がはっきり読めたか")
 
 
+class TranscribedChoice(BaseModel):
+    label_ja: str
+    label_en: str
+    price_delta: int = Field(description="追加料金（円）。書いていなければ 0")
+
+
+class TranscribedOption(BaseModel):
+    applies_to: Literal["drink", "snack", "fried", "grill", "sashimi", "noodle", "rice", "dessert", "topping", "set"]
+    label_ja: str = Field(description="選択肢の名前（例：麺の硬さ、麺の量）")
+    label_en: str
+    choices: list[TranscribedChoice]
+
+
 class Transcription(BaseModel):
     items: list[TranscribedItem]
+    options: list[TranscribedOption] = Field(default_factory=list, description="料理の選択肢（麺の硬さ・大盛りなど）")
     business_type_guess: Literal["izakaya", "teishoku", "ramen", "cafe", "unknown"]
 
 
@@ -70,7 +84,9 @@ async def transcribe(image: bytes, mime: str) -> Transcription:
     instruction = (
         "あなたは飲食店のメニューを書き写す係です。写真に書いてある料理名・価格をそのまま書き写してください。"
         "書いていないこと（材料・アレルゲン・説明）は書かないでください。価格が読めないときは null にしてください。"
-        "トッピングや大盛りなどの追加料金の項目は category を topping にしてください。"
+        "トッピング（味玉・チャーシュー増しなど、別の品として追加するもの）は category を topping にしてください。"
+        "「麺の硬さ」「大盛り」など、料理の選び方（選択肢）は items ではなく options に書いてください。"
+        "最初の選択肢を「ふつう」「並」など追加料金なしのものにしてください。"
     )
     parts = [types.Part.from_bytes(data=image, mime_type=mime), "このメニューを書き写してください。"]
     return await _generate(parts, Transcription, instruction)  # type: ignore[return-value]
