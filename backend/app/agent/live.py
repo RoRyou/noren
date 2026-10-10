@@ -58,6 +58,7 @@ class VoiceSession:
         self.queue: LiveRequestQueue | None = None
         self.task: asyncio.Task | None = None
         self.idle_task: asyncio.Task | None = None
+        self._last_activity = 0.0
         self.closed = asyncio.Event()
         self.turn = 0
         self.opened_at = 0.0
@@ -143,14 +144,21 @@ class VoiceSession:
         await self.send_json({"type": "voice_state", "state": "closed", "reason": reason})
 
     def _arm_idle(self) -> None:
-        if self.idle_task:
-            self.idle_task.cancel()
+        """最後の動き（お客様の発話・画面操作、AI の声・文字・ツール）から idle_close_s 秒たったら閉じる。
+        AI がツールを続けて呼んでいる間は閉じない（以前は返答の途中で閉じ、注文が途切れた：ZI-065）。"""
+        self._last_activity = time.monotonic()
+        if self.idle_task and not self.idle_task.done():
+            return
 
-        async def wait():
-            await asyncio.sleep(self.idle_close_s)
-            await self.close("idle")
+        async def watch():
+            while not self.closed.is_set():
+                left = self.idle_close_s - (time.monotonic() - self._last_activity)
+                if left <= 0:
+                    await self.close("idle")
+                    return
+                await asyncio.sleep(min(left, 1.0))
 
-        self.idle_task = asyncio.create_task(wait())
+        self.idle_task = asyncio.create_task(watch())
 
     # --- 入力 -------------------------------------------------------------
     def push_audio(self, pcm16k: bytes) -> None:
@@ -212,6 +220,7 @@ class VoiceSession:
         try:
             async for ev in runner.run_live(user_id=self.session_id, session_id=adk_session_id,
                                             live_request_queue=self.queue, run_config=run_config):
+                self._last_activity = time.monotonic()  # AI が動いている間は閉じない
                 if TRACE:
                     log.info("ev %s fc=%s fr=%s audio=%s out=%s tc=%s partial=%s", self.correlation(),
                              [f.name for f in ev.get_function_calls()], [f.name for f in ev.get_function_responses()],
