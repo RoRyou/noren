@@ -251,6 +251,30 @@ async def sold_out(body: SoldOutIn, ctx: Ctx = Depends(http_ctx)) -> dict:
     return {"ok": True}
 
 
+class AgentIn(BaseModel):
+    text: str
+
+
+@router.post("/staff/agent")
+async def store_agent(body: AgentIn, ctx: Ctx = Depends(http_ctx)) -> dict:
+    """店舗エージェントに一言で伝える（「出汁が切れた」「今日のおすすめはまぐろ」など）。"""
+    from app.services.store_agent import StoreAgentService
+
+    result = await StoreAgentService(ctx.repo).handle(body.text)
+    if result.get("applied"):
+        ctx.svc.dispatcher.kick(ctx.repo)
+    return result
+
+
+@router.post("/staff/agent/{pending_id}/confirm")
+async def store_agent_confirm(pending_id: str, ctx: Ctx = Depends(http_ctx)) -> dict:
+    from app.services.store_agent import StoreAgentService
+
+    result = await StoreAgentService(ctx.repo).confirm(pending_id)
+    ctx.svc.dispatcher.kick(ctx.repo)
+    return result
+
+
 @router.get("/staff/audit")
 async def audit(ctx: Ctx = Depends(http_ctx)) -> list[dict]:
     return await ctx.repo.audit_logs()

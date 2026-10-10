@@ -17,6 +17,8 @@ export function StaffBoard() {
   const [board, setBoard] = useState<any>({ orders: [], escalations: [], tables: [], notifications: [] });
   const [menu, setMenu] = useState<any[]>([]);
   const [flash, setFlash] = useState("");
+  const [say, setSay] = useState("");
+  const [agent, setAgent] = useState<any>(null);
 
   async function load() {
     setBoard(await api.board());
@@ -89,6 +91,27 @@ export function StaffBoard() {
           ))}
         </section>
         <section>
+          <h2>店舗エージェント</h2>
+          <div className="row">
+            <input value={say} placeholder="例：出汁が切れた／今日のおすすめはまぐろ" onChange={(e) => setSay(e.target.value)}
+              onKeyDown={async (e) => { if (e.key === "Enter" && say) { setAgent(await api.storeAgent(say)); setSay(""); await load(); } }} />
+            <button className="primary" disabled={!say} onClick={async () => { setAgent(await api.storeAgent(say)); setSay(""); await load(); }}>伝える</button>
+          </div>
+          {agent && (
+            <div className="conv">
+              {agent.changes.length === 0 && <div>{agent.message}</div>}
+              {agent.changes.map((c: any, i: number) => (
+                <div key={i}>{c.knowledge ? `知識を登録：${c.knowledge}` : `${c.name}：${c.sold_out === true ? "品切れ" : c.sold_out === false ? "販売再開" : "今日のおすすめ"}`}</div>
+              ))}
+              {agent.pending_id ? (
+                <div className="row">
+                  <span className="warn">{agent.changes.length} 品に影響します。確認してください。</span>
+                  <button className="primary" onClick={async () => { await api.storeAgentConfirm(agent.pending_id); setAgent({ ...agent, pending_id: null, applied: true }); await load(); }}>確定</button>
+                  <button onClick={() => setAgent(null)}>取り消し</button>
+                </div>
+              ) : agent.applied ? <div className="small">反映しました</div> : null}
+            </div>
+          )}
           <h2>テーブル</h2>
           {board.tables.map((t: any) => (
             <div key={t.id} className="tbl">
