@@ -29,7 +29,17 @@ DEMO_TTL_S = 24 * 3600
 _SECRET = (settings.demo_secret or secrets.token_hex(32)).encode()
 
 _client: firestore.AsyncClient | None = None
-dispatcher = Dispatcher(hub, scheduler)
+
+
+def _scheduler():
+    if settings.tasks_queue:  # 本番：Cloud Tasks
+        from app.realtime.cloud_tasks import CloudTasksScheduler
+
+        return CloudTasksScheduler()
+    return scheduler
+
+
+dispatcher = Dispatcher(hub, _scheduler(), repo_factory=lambda store_id: Repo(client(), store_id))
 
 
 def client() -> firestore.AsyncClient:

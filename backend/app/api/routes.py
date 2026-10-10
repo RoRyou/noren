@@ -314,3 +314,37 @@ async def staff_stream(ctx: Ctx = Depends(http_ctx)) -> StreamingResponse:
 @router.post("/tasks/sweep")
 async def sweep(ctx: Ctx = Depends(http_ctx)) -> dict:
     return {"dispatched": await ctx.svc.dispatcher.dispatch(ctx.repo)}
+
+
+@router.post("/tasks/run/{name}")
+async def run_task(name: str, request: Request) -> dict:
+    """Cloud Tasks からの呼び出し（OIDC トークンを検証してから実行）。"""
+    from app.api.context import dispatcher
+    from app.realtime.cloud_tasks import verify_oidc
+
+    if not verify_oidc(request.headers.get("authorization")):
+        raise HTTPException(403, "forbidden")
+    handler = dispatcher.scheduler.handlers.get(name)
+    if handler is None:
+        raise HTTPException(404, name)
+    await handler(await request.json())
+    return {"ok": True}
+
+
+@router.post("/tasks/sweep_all")
+async def sweep_all(request: Request) -> dict:
+    """Cloud Scheduler から定期的に呼ぶ：送信待ちの outbox がある店をすべて処理する。"""
+    from google.cloud.firestore_v1.base_query import FieldFilter
+
+    from app.api.context import client, ctx_for, dispatcher
+    from app.realtime.cloud_tasks import verify_oidc
+
+    if not verify_oidc(request.headers.get("authorization")):
+        raise HTTPException(403, "forbidden")
+    stores = set()
+    async for snap in client().collection_group("outbox").where(filter=FieldFilter("status", "==", "pending")).stream():
+        stores.add(snap.reference.parent.parent.id)
+    total = 0
+    for store_id in stores:
+        total += await dispatcher.dispatch(ctx_for(store_id).repo)
+    return {"stores": len(stores), "dispatched": total}

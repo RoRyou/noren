@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # デモ店の時刻（ラストオーダーなどの判定に使う）。審査員がいつ試してもいいように固定する。空なら実時刻
     demo_clock: str = "19:00"
 
+    # 時間指定の処理（Cloud Tasks）。tasks_queue が空ならプロセス内のタイマーを使う（ローカル）
+    tasks_queue: str = ""
+    tasks_location: str = "asia-northeast1"
+    tasks_service_account: str = ""
+    public_base_url: str = ""  # Cloud Run の URL（タスクの呼び先と、OIDC の audience）
+
     # 音声ではない処理（メニュー取り込み・店舗エージェント）のモデル。global エンドポイントだけで提供
     text_model: str = "gemini-3.8-flash"
     text_location: str = "global"

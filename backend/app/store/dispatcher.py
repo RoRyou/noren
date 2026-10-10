@@ -18,12 +18,13 @@ log = logging.getLogger("noren.dispatcher")
 
 
 class Dispatcher:
-    def __init__(self, hub: Hub, scheduler: LocalScheduler):
+    def __init__(self, hub: Hub, scheduler: LocalScheduler, repo_factory=None):
         self.hub = hub
         self.scheduler = scheduler
         self._locks: dict[str, asyncio.Lock] = {}
         scheduler.register("escalation_followup", self._escalation_followup)
         self._repos: dict[str, Repo] = {}
+        self.repo_factory = repo_factory  # 別のインスタンスで登録されたタスクでも店を開けるように
 
     def _lock(self, store_id: str) -> asyncio.Lock:
         return self._locks.setdefault(store_id, asyncio.Lock())
@@ -80,6 +81,8 @@ class Dispatcher:
 
     async def _escalation_followup(self, payload: dict) -> None:
         repo = self._repos.get(payload["store_id"])
+        if repo is None and self.repo_factory:
+            repo = self.repo_factory(payload["store_id"])
         if repo is None:
             return
         esc = await repo.escalation(payload["escalation_id"])
