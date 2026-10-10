@@ -1,0 +1,150 @@
+"""注文の状態遷移（料理ごと）、在庫の増減、会計。
+
+料理ごと：accepted（受付）→ confirmed（厨房が受けた）/ rejected（断った）→ cooking → served。
+調理が始まる前なら、お客様が自分で取り消せる（cancelled）。
+注文全体の状態は、料理ごとの状態をまとめて決める。
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from app.domain.models import CartLine, Charge, LineStatus, MenuItem, Order, OrderLine, TableSession
+
+ALLOWED: dict[LineStatus, set[LineStatus]] = {
+    LineStatus.accepted: {LineStatus.confirmed, LineStatus.rejected, LineStatus.cancelled},
+    LineStatus.confirmed: {LineStatus.cooking, LineStatus.rejected, LineStatus.cancelled},
+    LineStatus.cooking: {LineStatus.served},
+    LineStatus.served: set(),
+    LineStatus.rejected: set(),
+    LineStatus.cancelled: set(),
+}
+CUSTOMER_CANCELLABLE = {LineStatus.accepted, LineStatus.confirmed}
+RELEASES_STOCK = {LineStatus.rejected, LineStatus.cancelled}
+
+
+class TransitionError(ValueError):
+    pass
+
+
+def transition(line: OrderLine, to: LineStatus) -> OrderLine:
+    if to not in ALLOWED[line.status]:
+        raise TransitionError(f"{line.status} → {to} はできません")
+    return line.model_copy(update={"status": to})
+
+
+def can_customer_cancel(line: OrderLine) -> bool:
+    return line.status in CUSTOMER_CANCELLABLE
+
+
+def aggregate_status(order: Order) -> str:
+    """料理ごとの状態から注文全体の状態を決める。"""
+    states = {l.status for l in order.lines}
+    live = states - {LineStatus.rejected, LineStatus.cancelled}
+    if not live:
+        return "void"
+    if live == {LineStatus.served}:
+        return "all_served"
+    if LineStatus.served in live:
+        return "partly_served"
+    if live & {LineStatus.confirmed, LineStatus.cooking}:
+        return "in_kitchen"
+    return "accepted"
+
+
+def build_lines(cart: list[CartLine], items: dict[str, MenuItem]) -> list[OrderLine]:
+    """カート → 注文明細（名前と価格はこの時点のスナップショット）。"""
+    return [
+        OrderLine(
+            line_id=c.line_id,
+            item_id=c.item_id,
+            name=items[c.item_id].name,
+            qty=c.qty,
+            unit_price=items[c.item_id].price,
+            for_guest=c.for_guest,
+            options=c.options,
+            is_alcohol=items[c.item_id].is_alcohol,
+        )
+        for c in cart
+    ]
+
+
+@dataclass
+class StockChange:
+    item_id: str
+    remaining: int | None
+    sold_out: bool
+    sold_out_reason: str
+    became_sold_out: bool = False
+    became_available: bool = False
+
+
+class StockError(ValueError):
+    def __init__(self, item_id: str, reason: str):
+        super().__init__(f"{item_id}: {reason}")
+        self.item_id = item_id
+        self.reason = reason
+
+
+def take_stock(items: dict[str, MenuItem], lines: list[OrderLine]) -> list[StockChange]:
+    """受付時の在庫引き当て（トランザクションの中で呼ぶ）。足りなければ StockError。"""
+    need: dict[str, int] = {}
+    for l in lines:
+        need[l.item_id] = need.get(l.item_id, 0) + l.qty
+    changes = []
+    for item_id, qty in need.items():
+        item = items[item_id]
+        if item.sold_out:
+            raise StockError(item_id, "sold_out")
+        if item.remaining is None:
+            continue
+        if item.remaining < qty:
+            raise StockError(item_id, "not_enough_stock")
+        left = item.remaining - qty
+        changes.append(StockChange(item_id, left, left == 0, "stock" if left == 0 else "", became_sold_out=left == 0))
+    return changes
+
+
+def release_stock(item: MenuItem, qty: int) -> StockChange | None:
+    """厨房が断った・お客様が取り消したときに在庫を戻す。在庫ゼロで品切れになっていたら解除する。"""
+    if item.remaining is None:
+        return None
+    left = item.remaining + qty
+    if item.sold_out and item.sold_out_reason == "stock":
+        return StockChange(item.id, left, False, "", became_available=True)
+    return StockChange(item.id, left, item.sold_out, item.sold_out_reason)
+
+
+@dataclass
+class Bill:
+    lines: list[dict] = field(default_factory=list)
+    charges: list[dict] = field(default_factory=list)
+    total: int = 0
+    per_person: int = 0
+    remainder: int = 0  # 割り切れない分（誰か 1 人が多く払う）
+
+
+def make_bill(session: TableSession, orders: list[Order]) -> Bill:
+    """会計 = 料理の価格スナップショット（断られた・取り消した分は除く）+ お通しなどの charges。"""
+    bill = Bill()
+    for order in orders:
+        for l in order.lines:
+            if l.status in (LineStatus.rejected, LineStatus.cancelled):
+                continue
+            amount = l.unit_price * l.qty
+            bill.lines.append({"line_id": l.line_id, "name": l.name.model_dump(by_alias=True), "qty": l.qty,
+                               "unit_price": l.unit_price, "amount": amount, "for_guest": l.for_guest})
+            bill.total += amount
+    for c in session.charges:
+        amount = c.unit_price * c.qty
+        bill.charges.append({"kind": c.kind, "label": c.label.model_dump(by_alias=True), "qty": c.qty,
+                             "unit_price": c.unit_price, "amount": amount, "reason": c.reason})
+        bill.total += amount
+    people = max(session.party_size, 1)
+    bill.per_person = bill.total // people
+    bill.remainder = bill.total - bill.per_person * people
+    return bill
+
+
+def otoshi_charge(price: int, party_size: int, label) -> Charge:
+    return Charge(kind="otoshi", label=label, unit_price=price, qty=party_size, reason="seated")
