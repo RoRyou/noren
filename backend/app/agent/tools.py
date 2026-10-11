@@ -150,9 +150,9 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
                                              actor="reception_agent", correlation_id=correlation())
             out = check.to_dict()
             if check.decision == Decision.need_guest:
-                await emit({"type": "ask_guest", "purpose": "item", "item_id": item_id, "qty": qty, "verdicts": out["verdicts"]})
+                await emit({"type": "ask_guest", "purpose": "item", "item_id": item_id, "qty": qty, "verdicts": out["verdicts"], "options": opts})
             elif check.decision == Decision.need_alcohol_check:
-                await emit({"type": "ask_alcohol", "item_id": item_id, "qty": qty, "for_guest": check.for_guest})
+                await emit({"type": "ask_alcohol", "item_id": item_id, "qty": qty, "for_guest": check.for_guest, "options": opts})
             elif check.decision in (Decision.rejected, Decision.need_staff):
                 alts = await svc.alternatives_for(session_id, item_id, check.for_guest)
                 out["alternatives"] = [_brief(a, lang) for a in alts]

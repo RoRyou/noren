@@ -178,9 +178,13 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
         setCart(m.cart);
         break;
       case "ask_guest":
-        if (m.item_id) setSheet({ kind: "guest", item_id: m.item_id, qty: m.qty ?? 1, verdicts: m.verdicts, multi: (m.qty ?? 1) > 1 && cards[m.item_id]?.is_alcohol });
+        if (m.item_id) {
+          if (m.options && Object.keys(m.options).length > 0) chosenOptions.current[m.item_id] = m.options;
+          setSheet({ kind: "guest", item_id: m.item_id, qty: m.qty ?? 1, verdicts: m.verdicts, multi: (m.qty ?? 1) > 1 && cards[m.item_id]?.is_alcohol });
+        }
         break;
       case "ask_alcohol":
+        if (m.options && Object.keys(m.options).length > 0) chosenOptions.current[m.item_id] = m.options;
         setSheet({ kind: "alcohol", item_id: m.item_id, qty: m.qty ?? 1, for_guest: m.for_guest });
         break;
       case "blocked":
