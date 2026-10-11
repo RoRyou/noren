@@ -38,6 +38,8 @@ def _brief(card: dict, lang: str) -> dict:
         "sold_out": card["sold_out"],
         "for_each_guest": {gid: m["mark"] + ("（" + "、".join(m["reasons"]) + "）" if m["reasons"] else "")
                            for gid, m in card["marks"].items()},
+        # 自分からすすめてよいのは、全員が ○ の料理だけ（✕ △ ？ が 1 人でもいれば false）
+        "ok_for_everyone": all(m["mark"] == "○" for m in card["marks"].values()),
         "allergens": [allergen_label(a, label) for a in card["allergens"]],
         "cross_contact": [allergen_label(a, label) for a in card["cross_contact"]],
         "allergy_info_confirmed": card["allergen_status"] == "confirmed",
