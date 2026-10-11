@@ -58,7 +58,8 @@ def _read(paths: list[str]) -> str:
         f = (REPO_ROOT / p) if not Path(p).is_absolute() else Path(p)
         if not f.exists():
             f = REPO_ROOT / "backend" / p
-        out.append(f"===== {f.relative_to(REPO_ROOT)} =====\n{f.read_text()}")
+        rel = f.resolve().relative_to(REPO_ROOT) if f.exists() else Path(p.removeprefix("../"))
+        out.append(f"===== {rel} =====\n{f.read_text() if f.exists() else '（まだない。新しいファイル）'}")
     return "\n\n".join(out)
 
 
