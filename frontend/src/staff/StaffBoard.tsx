@@ -162,6 +162,7 @@ export function StaffBoard() {
               <div>引き継ぎ：{metrics.escalations} 件{Object.keys(metrics.escalations_by_reason || {}).length > 0 && `（${Object.entries(metrics.escalations_by_reason).map(([r, c]) => `${REASON_JA[r] ?? r}: ${c}`).join("、")}）`}</div>
               <div>止めた件数：{metrics.blocked} 件{Object.keys(metrics.blocked_by_reason || {}).length > 0 && `（${Object.entries(metrics.blocked_by_reason).map(([r, c]) => `${r}: ${c}`).join("、")}）`}</div>
               <div>断った料理：{metrics.lines_rejected} 件 / 取り消し：{metrics.lines_cancelled} 件</div>
+              <div>AI の使用量：1 テーブルあたり {metrics.tokens_per_table?.toLocaleString()} トークン{metrics.ai_cost_yen_per_table != null && `（約 ¥${metrics.ai_cost_yen_per_table}）`}</div>
             </div>
           )}
           <h2>記録</h2>
