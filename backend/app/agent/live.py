@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from typing import Awaitable, Callable
 
@@ -35,6 +36,9 @@ log = logging.getLogger("noren.live")
 
 IDLE_CLOSE_S = 20.0
 NUDGE_AFTER_S = 4.0
+# 「カートに入れました」と言ったか（読み上げの「カートに〜があります」は含めない）
+CLAIM_ADDED = re.compile(r"\b(i'?ve added|i have added|added (the|your|it|them|that|those|one|two|\d))|"
+                         r"(?:入れ|入れし|追加し)ました", re.I)
 TRACE = bool(__import__("os").environ.get("NOREN_LIVE_TRACE"))
 IN_RATE = 16000
 
@@ -71,6 +75,11 @@ class VoiceSession:
         self._nudged = False
         self._watch: asyncio.Task | None = None
         self.heard = 0  # お客様の発話・画面操作を受け取った回数
+        # 1 回の返答で話した文字と呼んだツール（「入れました」と言ったのに add_item を呼んでいない対策）
+        self._turn_text = ""
+        self._turn_tool_names: list[str] = []
+        self._screen_turn = False
+        self._claim_checked = False
 
     def duration_s(self) -> float:
         """会話を開いていた秒数（費用の上限の計算に使う）。"""
@@ -99,7 +108,7 @@ class VoiceSession:
             agent = LlmAgent(name="interpreter", model=Gemini(model=settings.live_model, client_kwargs=_vertex_kwargs()),
                              instruction=build_interpret_instruction(self.lang), tools=[])
         else:
-            instruction = build_instruction(store, session, Phase(view["phase"]), cart_names, order_lines)
+            instruction = build_instruction(store, session, Phase(view["phase"]), cart_names, order_lines, items)
             agent = LlmAgent(
                 name="reception",
                 model=Gemini(model=settings.live_model, client_kwargs=_vertex_kwargs()),
@@ -185,11 +194,13 @@ class VoiceSession:
             self.heard += 1
             self._arm_idle()
             self._input_end = time.monotonic()
-            self._new_turn()
+            self._new_turn(screen=True)  # 画面で入れた料理を AI が「入れました」と言うのは正しい
             self.queue.send_content(types.Content(role="user", parts=[types.Part(text=f"[画面操作] {text_ja}")]))
 
-    def _new_turn(self) -> None:
+    def _new_turn(self, screen: bool = False) -> None:
         self._turn_tools = self._turn_spoke = self._nudged = False
+        self._turn_text, self._turn_tool_names = "", []
+        self._screen_turn, self._claim_checked = screen, False
         self._cancel_watch()
 
     async def _after_tool_turn(self) -> None:
@@ -207,6 +218,25 @@ class VoiceSession:
             await self.send_json({"type": "turn_complete"})
         except asyncio.CancelledError:
             pass
+
+    async def _check_claims(self) -> None:
+        """「カートに入れました」と言ったのに、この返答で add_item / update_item を呼んでいなければ、
+        いまのカートを添えて 1 回だけ直させる（ZI-068。画面で入れた料理の返答は除く）。"""
+        if self._claim_checked or self._screen_turn or not CLAIM_ADDED.search(self._turn_text):
+            return
+        if any(n in ("add_item", "update_item") for n in self._turn_tool_names):
+            return
+        self._claim_checked = True
+        if not self.queue or self.closed.is_set():
+            return
+        session = await self.svc.repo.session(self.session_id)
+        items = await self.svc.repo.menu()
+        cart = "、".join(f"{items[l.item_id].name.ja}×{l.qty}" for l in session.cart if l.item_id in items) or "空"
+        self.metrics["claim_fixes"] = self.metrics.get("claim_fixes", 0) + 1
+        log.info("claimed add without add_item (%s): %s", self.correlation(), self._turn_text[:80])
+        self.queue.send_content(types.Content(role="user", parts=[types.Part(text=(
+            f"[システム] いまの返答で「カートに入れた」と言いましたが、add_item は呼ばれていません。いまのカート：{cart}。"
+            "お客様が頼んだ料理でカートにないものだけ add_item を呼び、入れられなかったものはお客様に訂正してください。"))]))
 
     def _cancel_watch(self) -> None:
         if self._watch:
@@ -248,12 +278,14 @@ class VoiceSession:
                         await self.send_json({"type": "transcript", "role": "ai", "text": ai_partial, "final": False})
                     else:
                         ai_partial = ""
+                        self._turn_text += ev.output_transcription.text
                         await self.send_json({"type": "transcript", "role": "ai", "text": ev.output_transcription.text,
                                               "final": True})
                         await self.svc.repo.append_turn(self.session_id, "ai", ev.output_transcription.text)
                 for fc in ev.get_function_calls():
                     self.metrics["tool_calls"].append(fc.name)
                     self._turn_tools = True
+                    self._turn_tool_names.append(fc.name)
                     self._turn_spoke = False  # 見るのはツールの後に話したかどうか
                     self._cancel_watch()
                 if ev.content and ev.content.parts:
@@ -270,6 +302,7 @@ class VoiceSession:
                 if ev.turn_complete:
                     self.metrics["turns"] += 1
                     if ai_partial:  # 確定の文字起こしが来ないまま区切られた → 途中までの文字を確定として送る
+                        self._turn_text += ai_partial
                         await self.send_json({"type": "transcript", "role": "ai", "text": ai_partial, "final": True})
                         await self.svc.repo.append_turn(self.session_id, "ai", ai_partial)
                         ai_partial = ""
@@ -279,6 +312,7 @@ class VoiceSession:
                         self._watch = asyncio.create_task(self._after_tool_turn())
                     else:
                         await self.send_json({"type": "turn_complete"})
+                        await self._check_claims()
         except asyncio.CancelledError:
             pass
         except Exception as e:  # 会話は閉じても、画面のタッチ操作は続けられる

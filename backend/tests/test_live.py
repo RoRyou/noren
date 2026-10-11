@@ -26,3 +26,62 @@ async def test_idle_close_waits_while_ai_is_busy():
     await asyncio.sleep(0.5)
     assert v.closed.is_set()
     assert sent[-1] == {"type": "voice_state", "state": "closed", "reason": "idle"}
+
+
+class _Repo:
+    async def session(self, _):
+        from app.domain.models import CartLine, TableSession
+
+        return TableSession(id="s", store_id="d", table_no="1", party_size=1, lang="en",
+                            cart=[CartLine(line_id="c1", item_id="s_cucumber", qty=1)])
+
+    async def menu(self):
+        from app.seed.izakaya import build_menu
+
+        return build_menu()
+
+
+class _Svc:
+    repo = _Repo()
+
+
+class _Queue:
+    def __init__(self):
+        self.sent = []
+
+    def send_content(self, c):
+        self.sent.append(c.parts[0].text)
+
+
+async def _voice():
+    async def noop(_):
+        pass
+
+    v = VoiceSession(svc=_Svc(), session_id="s", send_json=noop, send_audio=noop)
+    v.queue = _Queue()
+    return v
+
+
+async def test_claimed_add_without_tool_is_corrected_once():
+    """「入れました」と言ったのに add_item を呼んでいない → いまのカートを添えて 1 回だけ直させる（ZI-068）。"""
+    v = await _voice()
+    v._new_turn()
+    v._turn_text = "I've added the edamame to your cart."
+    v._turn_tool_names = ["search_menu"]
+    await v._check_claims()
+    await v._check_claims()
+    assert len(v.queue.sent) == 1 and "たたききゅうり×1" in v.queue.sent[0]
+
+
+async def test_claim_is_fine_after_add_item_or_screen_tap():
+    v = await _voice()
+    v._new_turn()
+    v._turn_text, v._turn_tool_names = "枝豆をカートに入れました。", ["add_item"]
+    await v._check_claims()
+    v._new_turn(screen=True)  # 画面で入れた料理について話すのは正しい
+    v._turn_text = "I've added the beer for Guest 2."
+    await v._check_claims()
+    v._new_turn()
+    v._turn_text = "You have edamame in your cart. Shall I place the order?"
+    await v._check_claims()
+    assert v.queue.sent == []

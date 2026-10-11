@@ -37,7 +37,11 @@ class Score(BaseModel):
 def store_facts() -> str:
     menu = build_menu()
     lines = [f"- {i.name.ja} / {i.name.en}: {i.price}円, 食材 {'、'.join(i.ingredients)}"
-             + (f", 量 {i.portion.ja}" if i.portion else "") for i in menu.values()]
+             + (f", 量 {i.portion.ja}" if i.portion else "")
+             + (f", 説明 {i.description.ja}" if i.description else "")
+             + (f", 食べ方 {i.how_to_eat.ja}" if i.how_to_eat else "")
+             + (", 店主のおすすめ（chef's pick）" if i.owner_weight else "")
+             + (", 人気" if i.popularity >= 70 else "") for i in menu.values()]
     lines += [f"- 知識: {k['text'].ja}" for k in KNOWLEDGE]
     store = build_store()
     lines.append(f"- 店のルール: お通し（{store.otoshi_label.ja}）お一人 {store.otoshi_price} 円、ラストオーダー {store.last_order}")
@@ -69,7 +73,15 @@ async def main() -> int:
     for r in report["results"]:
         if not r.get("history"):
             continue
-        s = await judge(r["history"])
+        s = None
+        for _attempt in range(3):  # global エンドポイントがまれに応答しない → 90 秒で打ち切ってやり直す
+            try:
+                s = await asyncio.wait_for(judge(r["history"]), 90)
+                break
+            except (asyncio.TimeoutError, Exception) as e:  # noqa: BLE001
+                print(f"{r['id']}: やり直し（{type(e).__name__}）", flush=True)
+        if s is None:
+            continue
         r["quality"] = s.model_dump()
         scores.append(s)
         print(f"{r['id']}: 自然 {s.natural} 適合 {s.relevant} しつこくない {s.not_pushy} 捏造なし {s.no_invented_facts} "
