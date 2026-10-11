@@ -141,3 +141,9 @@ def cart_token(cart: list[CartLine]) -> str:
         ensure_ascii=False,
     )
     return hashlib.sha256(body.encode()).hexdigest()[:16]
+
+
+def cart_text(cart: list[CartLine], items: dict[str, MenuItem]) -> list[str]:
+    """AI に渡すカートの一覧。数量の変更・削除に使う line_id を付ける（料理の id と取り違えないように）。"""
+    return [f"{items[l.item_id].name.ja}×{l.qty}" + (f"（{l.for_guest}）" if l.for_guest else "") + f" [line_id={l.line_id}]"
+            for l in cart if l.item_id in items]

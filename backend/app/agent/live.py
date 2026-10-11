@@ -25,6 +25,7 @@ from google.genai import types
 from app.agent.instructions import build_instruction, build_interpret_instruction
 from app.agent.tools import build_tools
 from app.config import settings
+from app.domain.cart import cart_text
 from app.domain.escalation import Reason, detect_medical
 from app.domain.keywords import find_mentions
 from app.domain.models import TableSession
@@ -249,7 +250,7 @@ class VoiceSession:
             return
         session = await self.svc.repo.session(self.session_id)
         items = await self.svc.repo.menu()
-        cart = "、".join(f"{items[l.item_id].name.ja}×{l.qty}" for l in session.cart if l.item_id in items) or "空"
+        cart = "、".join(cart_text(session.cart, items)) or "空"
         self.metrics["claim_fixes"] = self.metrics.get("claim_fixes", 0) + 1
         log.info("claimed add without add_item (%s): %s", self.correlation(), self._turn_text[:80])
         self.queue.send_content(types.Content(role="user", parts=[types.Part(text=(

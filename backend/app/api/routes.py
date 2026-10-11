@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from app.api.context import COOKIE, DEMO_TTL_S, Ctx, create_demo_store, http_ctx, verify
 from app.api.limits import allow_demo_creation
+from app.domain.cart import cart_text
 from app.domain.models import LineStatus
 from app.domain.orders import TransitionError
 from app.realtime.hub import hub
@@ -136,8 +137,7 @@ async def add_cart(sid: str, body: CartIn, ctx: Ctx = Depends(http_ctx)) -> dict
            "rejected": f"{name}は追加できませんでした（{'、'.join(check.reasons)}）。",
            "need_staff": f"{name}は店員の確認が必要です（{'、'.join(check.reasons)}）。"}.get(check.decision.value, "")
     menu = await ctx.repo.menu()
-    now = "、".join(f"{menu[l.item_id].name.ja}×{l.qty}" + (f"（{l.for_guest}）" if l.for_guest else "")
-                   for l in session.cart if l.item_id in menu) or "なし"
+    now = "、".join(cart_text(session.cart, menu)) or "なし"
     hub.publish(ctx.repo.store_id, f"table:{sid}", {"type": "ui", "event": "cart", "cart": out["cart"], "source": "touch",
                                                      "say_ja": f"{say} いまのカート：{now}"})
     return out

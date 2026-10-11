@@ -316,3 +316,24 @@ async def test_usage_and_metrics_cost(env, monkeypatch):
     })
     m2 = await repo.metrics()
     assert m2["ai_cost_yen_per_table"] == 1.2
+
+
+async def test_agent_tool_errors_do_not_break_the_session(env):
+    """間違った id で例外が出ても、ツールはエラーを返すだけ（音声の会話は続く）。料理の id での数量変更も受け付ける（ZI-070）。"""
+    from app.agent.tools import build_tools
+
+    svc, repo, *_ = env
+    s = await svc.seat("7", 1, "ja")
+    await svc.declare(s.id, [{"guest_id": "g1"}])
+
+    async def emit(_):
+        pass
+
+    tools = {t.__name__: t for t in build_tools(svc, s.id, "ja", emit, lambda: "t")}
+    assert (await tools["add_item"]("draft_beer"))["ok"] is False
+    assert (await tools["get_item"]("nope"))["ok"] is False
+    added = await tools["add_item"]("s_edamame", 1)
+    assert any("[line_id=" in c for c in added["cart_now"])
+    assert (await tools["update_item"]("s_edamame", 3))["ok"] is True  # 料理の id で数量を変える
+    assert (await repo.session(s.id)).cart[0].qty == 3
+    assert (await tools["update_item"]("f_karaage", 0))["error"] == "unknown_line_id"

@@ -13,7 +13,7 @@ import time
 from typing import Awaitable, Callable
 
 from app.domain.allergens import allergen_label
-from app.domain.cart import Decision
+from app.domain.cart import Decision, cart_text
 from app.domain.escalation import Reason
 from app.services.table import TableService
 
@@ -61,7 +61,12 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
         if name in MUTATING and key in recent and time.monotonic() - recent[key][0] < DEDUPE_S:
             return recent[key][1]  # 同じ呼び出しの繰り返し → 前の結果を返す
         await emit({"type": "expert", "expert": EXPERT.get(name, "other"), "tool": name})
-        result = await body()
+        try:
+            result = await body()
+        except Exception as e:  # 間違った id などで例外が出ても、音声の会話は止めずに AI に直させる（ZI-070）
+            log.warning("%s %s %s failed: %r", correlation(), name, json.dumps(args, ensure_ascii=False), e)
+            return {"ok": False, "error": "invalid_arguments" if isinstance(e, (KeyError, ValueError, TypeError)) else "failed",
+                    "hint": "item_id は検索・おすすめの結果の item_id、line_id はカートの [line_id=...] を使う。分からなければ search_menu で確かめる"}
         if result.get("reason") != "not_confirmed_yet":  # 「返事を待って」はまとめない（返事の直後の送信を通す）
             recent[key] = (time.monotonic(), result)
         log.info("%s %s %s → %s", correlation(), name, json.dumps(args, ensure_ascii=False),
@@ -155,17 +160,24 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             if check.ok:
                 await emit({"type": "cart", "cart": [l.model_dump() for l in s.cart]})
             menu = await svc.repo.menu()
-            out["cart_now"] = [f"{menu[l.item_id].name.ja}×{l.qty}" + (f"（{l.for_guest}）" if l.for_guest else "")
-                               for l in s.cart if l.item_id in menu]
+            out["cart_now"] = cart_text(s.cart, menu)
             if check.ok:  # 「受け付けました」と言ってしまう対策（注文はまだ送っていない）
                 out["note"] = "カートに入れただけで、注文はまだ送っていません。ほかに注文がなければ read_back で復唱します。"
             return out
         return await run("add_item", {"item_id": item_id, "qty": qty, "for_guest": for_guest, "options": options or []}, body)
 
     async def update_item(line_id: str, qty: int) -> dict:
-        """注文：カートの数量を変える（0 で削除）。"""
+        """注文：カートの数量を変える（0 で削除）。line_id はカートの [line_id=...]。"""
         async def body():
-            check, s = await svc.update_line(session_id, line_id, qty, actor="reception_agent")
+            session = await svc.repo.session(session_id)
+            target = line_id
+            if not any(l.line_id == line_id for l in session.cart):  # 料理の id が渡されたら、その料理の行が 1 つならそれを使う
+                same = [l.line_id for l in session.cart if l.item_id == line_id]
+                if len(same) != 1:
+                    menu = await svc.repo.menu()
+                    return {"ok": False, "error": "unknown_line_id", "cart_now": cart_text(session.cart, menu)}
+                target = same[0]
+            check, s = await svc.update_line(session_id, target, qty, actor="reception_agent")
             await emit({"type": "cart", "cart": [l.model_dump() for l in s.cart]})
             return {"ok": check is None or check.ok, **({"check": check.to_dict()} if check else {})}
         return await run("update_item", {"line_id": line_id, "qty": qty}, body)
