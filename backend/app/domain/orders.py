@@ -143,6 +143,7 @@ class Bill:
     total: int = 0
     per_person: int = 0
     remainder: int = 0  # 割り切れない分（誰か 1 人が多く払う）
+    per_guest: dict[str, int] = field(default_factory=dict)
 
 
 def make_bill(session: TableSession, orders: list[Order]) -> Bill:
@@ -164,6 +165,20 @@ def make_bill(session: TableSession, orders: list[Order]) -> Bill:
     people = max(session.party_size, 1)
     bill.per_person = bill.total // people
     bill.remainder = bill.total - bill.per_person * people
+
+    guest_ids = [g.id for g in session.guests]
+    own = {gid: 0 for gid in guest_ids}
+    for line in bill.lines:
+        gid = line["for_guest"]
+        if gid in own:
+            own[gid] += line["amount"]
+    shared = bill.total - sum(own.values())
+    n = max(len(guest_ids), 1)
+    shared_per_person = shared // n
+    shared_rem = shared - shared_per_person * n
+    bill.per_guest = {gid: own[gid] + shared_per_person for gid in guest_ids}
+    if guest_ids:
+        bill.per_guest[guest_ids[0]] += shared_rem
     return bill
 
 

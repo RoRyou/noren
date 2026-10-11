@@ -211,6 +211,22 @@ def test_bill_includes_otoshi_and_excludes_rejected():
     assert bill.per_person * 2 + bill.remainder == bill.total
 
 
+def test_bill_per_guest():
+    """各自払い：自分の料理 + 共有分（ゲストのない料理とお通し）を人数で割る。合計は必ず一致する。"""
+    s = session(guest("g1"), guest("g2"))
+    s.charges.append(otoshi_charge(500, 2, STORE.otoshi_label))
+    lines = build_lines([
+        CartLine(line_id="l1", item_id="d_beer", qty=1, for_guest="g1"),
+        CartLine(line_id="l2", item_id="f_karaage", qty=1, for_guest="g2"),
+        CartLine(line_id="l3", item_id="s_edamame", qty=1),
+    ], MENU)
+    bill = make_bill(s, [Order(id="o1", session_id="s1", lines=lines, idempotency_key="k")])
+    assert bill.total == 600 + 638 + 418 + 1000  # 枝豆 418 円、お通し 500 円 × 2
+    shared = (418 + 1000) // 2
+    assert bill.per_guest == {"g1": 600 + shared, "g2": 638 + shared}
+    assert sum(bill.per_guest.values()) == bill.total
+
+
 def test_price_snapshot_survives_menu_change():
     items = {k: v.model_copy() for k, v in MENU.items()}
     lines = build_lines([CartLine(line_id="l1", item_id="d_beer", qty=1)], items)

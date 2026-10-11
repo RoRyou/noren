@@ -517,6 +517,14 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
                   <div key={i} className="rb-line">{c.label[lang] || c.label.ja} ×{c.qty} ¥{c.amount.toLocaleString()}</div>
                 ))}
                 <div className="total">{t(lang, "total")} ¥{sheet.data.total.toLocaleString()} · {t(lang, "perPerson")} ¥{sheet.data.per_person.toLocaleString()}</div>
+                {sheet.data.per_guest && Object.keys(sheet.data.per_guest).length > 0 && (
+                  <div className="small">
+                    <div>{t(lang, "perGuest")}</div>
+                    {Object.entries(sheet.data.per_guest as Record<string, number>).map(([gid, amt]) => (
+                      <div key={gid}>{guestLabel(gid) || gid}：¥{amt.toLocaleString()}</div>
+                    ))}
+                  </div>
+                )}
                 <p className="note">{t(lang, "payAtRegister")}</p>
               </>
             )}
