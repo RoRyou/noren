@@ -99,7 +99,7 @@
      "expect": {"ordered": {"s_edamame": 1, "s_cucumber": 1}, "no_escalation": true}},
     {"id": "A12", "set": "A", "lang": "ja", "party": 1,
      "declarations": [{"guest_id": "g1"}],
-     "guest": "唐揚げを 1 つ頼む。次のターンで「やっぱり唐揚げはやめて、揚げ出し豆腐に変えてください」と言う。復唱が揚げ出し豆腐 1 つだけなら「はい」。",
+     "guest": "唐揚げを 1 つ頼む。次のターンで「やっぱり唐揚げはやめて、揚げ出し豆腐に変えてください」と言う。ほかに注文はあるか聞かれたら「以上です、注文してください」と答える。復唱が揚げ出し豆腐 1 つだけなら「はい、お願いします」。",
      "taps": {"guest_for": "g1"},
      "expect": {"ordered": {"f_agedashi": 1}, "no_escalation": true}},
     {"id": "A13", "set": "A", "lang": "en", "party": 3,
