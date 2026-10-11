@@ -8,13 +8,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from app.domain.models import LineStatus, Order, StoreSettings, TableSession
+from app.domain.models import LineStatus, Order, SessionStatus, StoreSettings, TableSession
 
 URGENT_REPEAT_S = 30
 URGENT_ESCALATE_S = 120
 NORMAL_ESCALATE_S = 120
 OVERDUE_MIN = 20
 LAST_ORDER_NOTICE_MIN = 15
+UNPAID_BILL_MIN = 15
 
 
 @dataclass
@@ -71,6 +72,13 @@ def time_rules(store: StoreSettings, sessions: list[TableSession], orders: list[
     out: list[Notification] = []
     if store.last_order and now_hhmm and 0 <= _minutes(store.last_order) - _minutes(now_hhmm) <= LAST_ORDER_NOTICE_MIN:
         out += last_order_notice(f"lo:{now.date().isoformat()}", sessions)
+    for s in sessions:
+        if s.status == SessionStatus.billing and s.bill_requested_at:
+            waited = int((now - datetime.fromisoformat(s.bill_requested_at)).total_seconds() // 60)
+            if waited >= UNPAID_BILL_MIN:
+                out.append(Notification("staff", "unpaid_bill",
+                                        {"session_id": s.id, "table_no": s.table_no, "minutes": waited},
+                                        f"unpaid:{s.id}"))
     for o in orders:
         if o.prepay and not o.paid:  # 先払いでまだ払っていない：厨房の遅れではない
             continue

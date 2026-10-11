@@ -297,7 +297,10 @@ class TableService:
         orders = await self.repo.orders_for(session_id)
         bill = make_bill(session, orders)
         if session.status == SessionStatus.dining:
-            await self.repo.update_session(session_id, {"status": SessionStatus.billing.value})
+            await self.repo.update_session(session_id, {
+                "status": SessionStatus.billing.value,
+                "bill_requested_at": now_iso(),
+            })
         return bill.__dict__
 
     async def close(self, session_id: str, actor: str = "staff") -> None:

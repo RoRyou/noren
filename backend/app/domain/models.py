@@ -172,6 +172,7 @@ class TableSession(BaseModel):
     recent_turns: list[dict] = []  # 直近の会話（role, text）
     status: SessionStatus = SessionStatus.dining
     seated_at: str = ""
+    bill_requested_at: str = ""
     closed_at: str = ""
     delete_after: str = ""
 

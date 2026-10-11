@@ -108,6 +108,7 @@ const dict = {
   noteLastOrder: T("まもなくラストオーダーです", "Last orders soon", "即将最后点餐", "即將最後點餐", "곧 마지막 주문이에요"),
   noteUpdated: T("ご注文の状況が更新されました", "Your order was updated", "订单状态已更新", "訂單狀態已更新", "주문 상태가 업데이트되었어요"),
   demoClock: T("デモの時刻 19:00", "Demo time 19:00", "演示时间 19:00", "示範時間 19:00", "데모 시각 19:00"),
+  bigText: T("文字を大きく", "Larger text", "放大文字", "放大文字", "글자 크게"),
   voiceUnavailable: T(
     "ただいま音声の会話は混み合っているか、本日の上限に達しました。文字とタッチでご注文いただけます。",
     "Voice is busy or has reached today's limit. You can still type or tap to order.",

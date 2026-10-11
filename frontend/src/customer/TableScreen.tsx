@@ -36,6 +36,23 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
   const [offline, setOffline] = useState(false);
   const [staffComing, setStaffComing] = useState(false);
   const [mode, setMode] = useState<"reception" | "interpret">("reception");
+  const [bigText, setBigText] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("noren_big_text") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  function toggleBigText() {
+    setBigText((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("noren_big_text", String(next));
+      } catch {}
+      return next;
+    });
+  }
   const ws = useRef<WebSocket | null>(null);
   const mic = useRef(new Mic());
   const player = useRef(new Player());
@@ -325,7 +342,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
   }, [cart.length, hasDrink]);
 
   return (
-    <div className="table-screen">
+    <div className={`table-screen${bigText ? " big-text" : ""}`}>
       <section className="left">
         <div className="experts">
           {experts.map((e) => (
@@ -366,6 +383,9 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
         )}
         <button className="emergency" onClick={async () => { await api.emergency(sid); setBanner(t(lang, "emergencySent")); }}>
           {t(lang, "emergency")}
+        </button>
+        <button className={bigText ? "big-toggle on" : "big-toggle"} aria-pressed={bigText} onClick={toggleBigText}>
+          {t(lang, "bigText")}
         </button>
       </section>
 

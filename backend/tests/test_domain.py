@@ -335,6 +335,29 @@ def test_time_rules_last_order_and_overdue():
     assert [n.kind for n in time_rules(store, [s], [], "21:00", now)] == []
 
 
+def test_time_rules_unpaid_bill():
+    """会計依頼から UNPAID_BILL_MIN（15 分）以上たったテーブルを店員に知らせる。"""
+    from datetime import datetime, timedelta
+
+    from app.domain.events import time_rules
+    from app.store.repo import JST
+
+    now = datetime(2026, 10, 11, 22, 20, tzinfo=JST)
+    s_over = TableSession(id="t1", table_no="1", party_size=1, status=SessionStatus.billing,
+                          bill_requested_at=(now - timedelta(minutes=16)).isoformat())
+    s_fresh = TableSession(id="t2", table_no="2", party_size=1, status=SessionStatus.billing,
+                           bill_requested_at=(now - timedelta(minutes=5)).isoformat())
+    out_over = time_rules(STORE, [s_over], [], "20:00", now)
+    assert len(out_over) == 1
+    assert out_over[0].kind == "unpaid_bill"
+    assert out_over[0].target == "staff"
+    assert out_over[0].dedupe_key == "unpaid:t1"
+    assert out_over[0].payload == {"session_id": "t1", "table_no": "1", "minutes": 16}
+
+    out_fresh = time_rules(STORE, [s_fresh], [], "20:00", now)
+    assert len(out_fresh) == 0
+
+
 def test_menu_search_matches_words_and_ranks():
     """「chicken skewers」でも焼き鳥が見つかり、唐揚げより上に来る。日本語は部分一致。"""
     from app.services.table import match_score

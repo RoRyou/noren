@@ -159,3 +159,12 @@ input[type="text"], input:not([type]) { font: inherit; padding: 10px 12px; borde
 .cross-sell { display: flex; gap: 10px; align-items: center; padding: 8px 14px; background: #fdf0e6; border-top: 1px solid #f3d9c4; }
 .cross-sell button { margin-left: auto; background: var(--accent); color: #fff; border: none; }
 .banner.warn { background: #fdecea; color: var(--ng); cursor: default; }
+
+/* 文字を大きく（アクセシビリティ） */
+.big-text { font-size: 1.25rem; }
+.big-text button { font-size: 1.1rem; }
+.big-text .card { font-size: 1.1rem; }
+.big-text .name { font-size: 1.3rem; }
+.big-text .bubble { font-size: 1.25rem; }
+.big-toggle { margin: 6px 14px 10px; font-size: 0.85rem; align-self: flex-start; width: auto; }
+.big-toggle.on { background: var(--accent); color: #fff; border: none; }
