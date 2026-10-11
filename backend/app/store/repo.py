@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 
+from app.config import settings
 from app.domain.cart import cart_token, recheck_cart
 from app.domain.models import (
     Guest, LineStatus, Localized, MenuItem, Order, SessionStatus, StoreSettings, TableSession,
@@ -130,6 +131,12 @@ class Repo:
     async def append_turn(self, session_id: str, role: str, text: str) -> None:
         await self.col("sessions").document(session_id).update(
             {"recent_turns": firestore.ArrayUnion([{"role": role, "text": text, "at": now_iso()}])})
+
+    async def add_usage(self, session_id: str, delta: dict[str, int]) -> None:
+        if not delta:
+            return
+        fields = {f"usage.{k}": firestore.Increment(v) for k, v in delta.items()}
+        await self.col("sessions").document(session_id).update(fields)
 
     async def open_sessions(self) -> list[TableSession]:
         out = []
@@ -393,6 +400,23 @@ class Repo:
         tables_without_staff = sum(1 for s in sessions if s.get("id") not in escalated_session_ids)
         unattended_rate = round(tables_without_staff / tables, 2) if tables else 0.0
 
+        usage_total: dict[str, int] = {}
+        for s in sessions:
+            for k, v in (s.get("usage") or {}).items():
+                if isinstance(v, (int, float)):
+                    usage_total[k] = usage_total.get(k, 0) + int(v)
+
+        total_tokens = sum(usage_total.values())
+        tokens_per_table = total_tokens // tables if tables else 0
+
+        ai_cost_yen_per_table: float | None = None
+        if settings.live_price_usd_per_mtok:
+            if tables:
+                cost_usd = sum(usage_total.get(k, 0) * p / 1e6 for k, p in settings.live_price_usd_per_mtok.items())
+                ai_cost_yen_per_table = round(cost_usd * settings.usd_jpy / tables, 1)
+            else:
+                ai_cost_yen_per_table = 0.0
+
         blocked = 0
         blocked_by_reason: dict[str, int] = {}
         async for snap in self.col("audit_logs").stream():
@@ -417,6 +441,9 @@ class Repo:
             "unattended_rate": unattended_rate,
             "blocked": blocked,
             "blocked_by_reason": blocked_by_reason,
+            "usage_total": usage_total,
+            "tokens_per_table": tokens_per_table,
+            "ai_cost_yen_per_table": ai_cost_yen_per_table,
         }
 
 

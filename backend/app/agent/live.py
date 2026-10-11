@@ -50,6 +50,22 @@ def _vertex_kwargs() -> dict:
     return {"vertexai": True, "project": settings.google_cloud_project, "location": settings.live_location}
 
 
+def usage_delta(meta) -> dict[str, int]:
+    """Live の使用量を、入力・出力 × 文字・音声と、考えた分に分ける（0 は含めない）。"""
+    def split(details, total: int) -> tuple[int, int]:
+        if not details:
+            return total or 0, 0
+        text = sum(d.token_count or 0 for d in details if "TEXT" in str(d.modality).upper())
+        audio = sum(d.token_count or 0 for d in details if "AUDIO" in str(d.modality).upper())
+        return text, audio
+
+    in_text, in_audio = split(meta.prompt_tokens_details, meta.prompt_token_count)
+    out_text, out_audio = split(meta.candidates_tokens_details, meta.candidates_token_count)
+    counts = {"in_text": in_text, "in_audio": in_audio, "out_text": out_text, "out_audio": out_audio,
+              "thoughts": meta.thoughts_token_count or 0}
+    return {k: v for k, v in counts.items() if v}
+
+
 class VoiceSession:
     def __init__(self, svc: TableService, session_id: str, send_json: SendJson, send_audio: SendAudio,
                  idle_close_s: float = IDLE_CLOSE_S, mode: str = "reception"):
@@ -253,6 +269,16 @@ class VoiceSession:
             async for ev in runner.run_live(user_id=self.session_id, session_id=adk_session_id,
                                             live_request_queue=self.queue, run_config=run_config):
                 self._last_activity = time.monotonic()  # AI が動いている間は閉じない
+                if TRACE and ev.usage_metadata:
+                    log.info("usage %s %s", self.correlation(), ev.usage_metadata.model_dump(exclude_none=True))
+                if ev.usage_metadata and (delta := usage_delta(ev.usage_metadata)):  # 返答ごとの使用量（累計ではない）
+                    usage = self.metrics.setdefault("usage", {})
+                    for k, v in delta.items():
+                        usage[k] = usage.get(k, 0) + v
+                    try:
+                        await self.svc.repo.add_usage(self.session_id, delta)
+                    except Exception:  # 記録の失敗で会話を止めない
+                        log.exception("failed to record usage (%s)", self.correlation())
                 if TRACE:
                     log.info("ev %s fc=%s fr=%s audio=%s out=%s tc=%s partial=%s", self.correlation(),
                              [f.name for f in ev.get_function_calls()], [f.name for f in ev.get_function_responses()],

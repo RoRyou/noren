@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # コスト対策：同時に開ける音声の会話の上限（話さなければ 20 秒で閉じる：agent/live.py の IDLE_CLOSE_S）
     live_max_concurrent_sessions: int = 20
 
+    # 料金は公式の価格表で確認して設定する（100 万トークンあたりのドル。空なら費用は出さない）
+    live_price_usd_per_mtok: dict[str, float] = {}
+    usd_jpy: float = 150.0
+
 
 settings = Settings()
 

@@ -94,3 +94,17 @@ async def test_claim_after_rejected_add_is_corrected():
     v._turn_text, v._turn_tool_names = "I've added 30 edamame to your cart.", ["add_item"]
     await v._check_claims()
     assert len(v.queue.sent) == 1
+
+
+def test_usage_delta_splits_text_and_audio():
+    from google.genai import types
+
+    from app.agent.live import usage_delta
+
+    meta = types.GenerateContentResponseUsageMetadata(  # ADK のイベントが持つ型
+        prompt_token_count=251, candidates_token_count=103, thoughts_token_count=66,
+        prompt_tokens_details=[types.ModalityTokenCount(modality=types.MediaModality.AUDIO, token_count=107),
+                               types.ModalityTokenCount(modality=types.MediaModality.TEXT, token_count=144)],
+        candidates_tokens_details=[types.ModalityTokenCount(modality=types.MediaModality.AUDIO, token_count=92),
+                                   types.ModalityTokenCount(modality=types.MediaModality.TEXT, token_count=11)])
+    assert usage_delta(meta) == {"in_text": 144, "in_audio": 107, "out_text": 11, "out_audio": 92, "thoughts": 66}

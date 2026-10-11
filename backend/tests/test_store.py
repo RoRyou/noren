@@ -290,3 +290,29 @@ async def test_metrics_summary(env):
     assert m["escalations"] == 1
     assert m["escalations_by_reason"] == {Reason.dietary_check.value: 1}
     assert m["unattended_rate"] == 0.0
+
+
+async def test_usage_and_metrics_cost(env, monkeypatch):
+    svc, repo, *_ = env
+    s = await seat_dialogue1(svc)
+    await repo.add_usage(s.id, {"in_text": 100, "in_audio": 200})
+    await repo.add_usage(s.id, {"in_text": 50, "out_audio": 300, "thoughts": 50})
+
+    loaded = await repo.session(s.id)
+    assert loaded.usage == {"in_text": 150, "in_audio": 200, "out_audio": 300, "thoughts": 50}
+
+    m = await repo.metrics()
+    assert m["usage_total"] == {"in_text": 150, "in_audio": 200, "out_audio": 300, "thoughts": 50}
+    assert m["tokens_per_table"] == 700
+    assert m["ai_cost_yen_per_table"] is None
+
+    from app.config import settings
+    monkeypatch.setattr(settings, "live_price_usd_per_mtok", {
+        "in_text": 1.0,
+        "in_audio": 10.0,
+        "out_text": 2.0,
+        "out_audio": 20.0,
+        "thoughts": 1.0,
+    })
+    m2 = await repo.metrics()
+    assert m2["ai_cost_yen_per_table"] == 1.2

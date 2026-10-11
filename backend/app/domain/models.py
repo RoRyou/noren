@@ -170,6 +170,7 @@ class TableSession(BaseModel):
     accepted_recs: list[str] = []
     rejected_recs: list[str] = []
     recent_turns: list[dict] = []  # 直近の会話（role, text）
+    usage: dict[str, int] = {}
     status: SessionStatus = SessionStatus.dining
     seated_at: str = ""
     bill_requested_at: str = ""
