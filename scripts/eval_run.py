@@ -248,30 +248,41 @@ async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://127.0.0.1:8080")
     ap.add_argument("--only", action="append")
+    ap.add_argument("--set", choices=["A", "B"], help="場面の組だけを流す")
+    ap.add_argument("--tag", default="", help="結果のフォルダ名に付ける（同時に複数流すとき）")
+    ap.add_argument("--parallel", type=int, default=1, help="同時に流すテーブルの数（遅延の数字は同時実行の影響を受ける）")
     args = ap.parse_args()
     scenarios = json.loads((REPO_ROOT / "backend" / "tests" / "eval_scenarios.json").read_text())["scenarios"]
     if args.only:
         scenarios = [s for s in scenarios if s["id"] in args.only]
+    if args.set:
+        scenarios = [s for s in scenarios if s["set"] == args.set]
     http = httpx.AsyncClient(base_url=args.base, timeout=60)
     token = (await http.post("/api/demo/start", params={"reset": "true"})).json()["token"]
     http.headers["x-noren-demo"] = token
-    out = REPO_ROOT / "logs" / "eval" / datetime.now().strftime("%Y%m%d-%H%M%S")
+    out = REPO_ROOT / "logs" / "eval" / (datetime.now().strftime("%Y%m%d-%H%M%S") + (f"-{args.tag}" if args.tag else ""))
     out.mkdir(parents=True, exist_ok=True)
     results = []
-    for s in scenarios:
-        run = Run(http, args.base, token, s)
-        await run.setup()
-        try:
-            meta = await run.play()
-            verdict = await run.judge()
-        except Exception as e:  # 1 件の失敗で全体を止めない
-            meta, verdict = {"seconds": 0}, {"pass": False, "error": str(e)[:200], "checks": {}}
-        res = {"id": s["id"], "set": s["set"], **meta, **verdict, "latencies_ms": run.latencies, "history": run.history,
-               "silent_turns": run.silent_turns, "harness_error": run.harness_error}
-        results.append(res)
-        print(f"{s['id']} {'PASS' if verdict['pass'] else 'FAIL'} {verdict.get('checks')} ordered={verdict.get('ordered')} "
-              f"esc={verdict.get('escalations')} {meta['seconds']}s", flush=True)
-        (out / "report.json").write_text(json.dumps({"results": results}, ensure_ascii=False, indent=2))
+    gate = asyncio.Semaphore(max(args.parallel, 1))
+
+    async def one(s: dict) -> None:
+        async with gate:
+            run = Run(http, args.base, token, s)
+            try:
+                await run.setup()
+                meta = await run.play()
+                verdict = await run.judge()
+            except Exception as e:  # 1 件の失敗で全体を止めない
+                meta, verdict = {"seconds": 0}, {"pass": False, "error": str(e)[:200], "checks": {}}
+            res = {"id": s["id"], "set": s["set"], **meta, **verdict, "latencies_ms": run.latencies, "history": run.history,
+                   "silent_turns": run.silent_turns, "harness_error": run.harness_error}
+            results.append(res)
+            results.sort(key=lambda r: [x["id"] for x in scenarios].index(r["id"]))
+            print(f"{s['id']} {'PASS' if verdict['pass'] else 'FAIL'} {verdict.get('checks')} ordered={verdict.get('ordered')} "
+                  f"esc={verdict.get('escalations')} {meta['seconds']}s", flush=True)
+            (out / "report.json").write_text(json.dumps({"results": results}, ensure_ascii=False, indent=2))
+
+    await asyncio.gather(*(one(s) for s in scenarios))
 
     a = [r for r in results if r["set"] == "A"]
     b = [r for r in results if r["set"] == "B"]
@@ -285,6 +296,7 @@ async def main() -> int:
         "silent_ai_turns": sum(r.get("silent_turns", 0) for r in results),
         "harness_errors": [r["id"] for r in results if r.get("harness_error")],
     }
+    summary["parallel"] = args.parallel
     (out / "report.json").write_text(json.dumps({"summary": summary, "results": results}, ensure_ascii=False, indent=2))
     print("\nsummary:", json.dumps(summary, ensure_ascii=False), "\nreport:", out / "report.json")
     return 0
