@@ -11,8 +11,8 @@ from app.domain.models import (
     AlcoholCheck, CartLine, Guest, LineStatus, Order, OrderLine, SessionStatus, TableSession,
 )
 from app.domain.orders import (
-    StockError, TransitionError, aggregate_status, build_lines, make_bill, otoshi_charge, release_stock, take_stock,
-    transition,
+    StockError, TransitionError, aggregate_status, build_lines, estimate_wait_min, make_bill, otoshi_charge,
+    release_stock, take_stock, transition,
 )
 from app.domain.recommend import alternatives, recommend
 from app.domain.table_state import Phase, derive_phase
@@ -232,6 +232,32 @@ def test_price_snapshot_survives_menu_change():
     lines = build_lines([CartLine(line_id="l1", item_id="d_beer", qty=1)], items)
     items["d_beer"].price = 999
     assert lines[0].unit_price == 600
+
+
+def test_estimate_wait_min():
+    """厨房待ちの待ち時間見積もり：0件で5分、品数×数量で計算、上限60分、未払いの先払いは除外。"""
+    assert estimate_wait_min([]) == 5
+
+    lines = [
+        OrderLine(line_id="l1", item_id="f_karaage", name=MENU["f_karaage"].name, qty=2, unit_price=638, status=LineStatus.accepted),
+        OrderLine(line_id="l2", item_id="s_edamame", name=MENU["s_edamame"].name, qty=3, unit_price=418, status=LineStatus.cooking),
+        OrderLine(line_id="l3", item_id="d_beer", name=MENU["d_beer"].name, qty=1, unit_price=600, status=LineStatus.served),
+    ]
+    # accepted 2 + cooking 3 = 5 品。5 + 2 * 5 = 15 分
+    order1 = Order(id="o1", session_id="s1", lines=lines, idempotency_key="k1")
+    assert estimate_wait_min([order1]) == 15
+
+    # 未払いの先払いは除外
+    unpaid = Order(id="o2", session_id="s2", lines=[
+        OrderLine(line_id="l4", item_id="f_karaage", name=MENU["f_karaage"].name, qty=5, unit_price=638, status=LineStatus.accepted)
+    ], idempotency_key="k2", prepay=True, paid=False)
+    assert estimate_wait_min([order1, unpaid]) == 15
+
+    # 上限 60 分（30 個で 5 + 2 * 30 = 65 -> 60）
+    huge = Order(id="o3", session_id="s3", lines=[
+        OrderLine(line_id="l5", item_id="f_karaage", name=MENU["f_karaage"].name, qty=30, unit_price=638, status=LineStatus.accepted)
+    ], idempotency_key="k3")
+    assert estimate_wait_min([huge]) == 60
 
 
 # --- テーブル状態・イベント・引き継ぎ・おすすめ ------------------------------------

@@ -184,3 +184,20 @@ def make_bill(session: TableSession, orders: list[Order]) -> Bill:
 
 def otoshi_charge(price: int, party_size: int, label) -> Charge:
     return Charge(kind="otoshi", label=label, unit_price=price, qty=party_size, reason="seated")
+
+
+def estimate_wait_min(open_orders: list[Order]) -> int:
+    """厨房待ちの品数から料理が出るまでのおおよその待ち時間（分）を見積もる。
+
+    5 + 2 × 品数の簡易計算（上限 60 分）。混雑状況をお客様に伝えるための目安値。
+    先払いで未払いの注文は厨房が着手しないため除外する。
+    """
+    wait_statuses = {LineStatus.accepted, LineStatus.confirmed, LineStatus.cooking}
+    n = 0
+    for order in open_orders:
+        if order.prepay and not order.paid:
+            continue
+        for line in order.lines:
+            if line.status in wait_statuses:
+                n += line.qty
+    return min(5 + 2 * n, 60)

@@ -93,6 +93,13 @@ const dict = {
   perGuest: T("各自払いの場合", "If paying separately", "分开付款时", "分開付款時", "각자 계산할 경우"),
   payAtRegister: T("お支払いはレジでお願いします", "Please pay at the register", "请到收银台付款", "請到收銀台付款", "계산대에서 결제해 주세요"),
   total: T("合計", "Total", "合计", "合計", "합계"),
+  waitNotice: T(
+    "ただいま混み合っており、お料理まで約 {n} 分かかる見込みです",
+    "The kitchen is busy — food may take about {n} minutes",
+    "目前较忙，上菜大约需要 {n} 分钟",
+    "目前較忙，上菜大約需要 {n} 分鐘",
+    "지금 주방이 바빠서 음식까지 약 {n}분 걸릴 것 같아요",
+  ),
   staffNotified: T("店員に連絡しました", "We've let the staff know", "已通知店员", "已通知店員", "직원에게 알렸어요"),
   markLegend: T(
     "○ 食べられる　✕ 含む　△ 混入の可能性　？ 未確認",

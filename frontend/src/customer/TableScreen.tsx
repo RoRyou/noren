@@ -525,6 +525,9 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
                 ))}
                 {sheet.data.problems?.length > 0 && <p className="warn">{JSON.stringify(sheet.data.problems.map((p: any) => p.reasons))}</p>}
                 <div className="total">{t(lang, "total")} ¥{sheet.data.total.toLocaleString()}</div>
+                {sheet.data.wait_min >= 15 && (
+                  <p className="note">{t(lang, "waitNotice").replace("{n}", String(sheet.data.wait_min))}</p>
+                )}
                 <div className="row">
                   <button onClick={() => setSheet(null)}>{t(lang, "fix")}</button>
                   <button className="primary" disabled={!sheet.data.confirm_token} onClick={() => submit(sheet.data.confirm_token)}>{t(lang, "sendOrder")}</button>

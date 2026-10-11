@@ -13,7 +13,7 @@ from app.domain import escalation as esc_rules
 from app.domain.cart import CartCheck, Decision, cart_token, check_add, recheck_cart
 from app.domain.dietary import describe_reasons, judge_table
 from app.domain.models import AlcoholCheck, CartLine, LineStatus, MenuItem, SessionStatus, TableSession
-from app.domain.orders import can_customer_cancel, make_bill, unit_price
+from app.domain.orders import can_customer_cancel, estimate_wait_min, make_bill, unit_price
 from app.domain.recommend import alternatives, recommend
 from app.domain.table_state import derive_phase
 from app.store.dispatcher import Dispatcher
@@ -183,7 +183,8 @@ class TableService:
                 "allergen_status": item.allergen_status.value,
             })
         result = {"lines": lines, "total": sum(x["amount"] for x in lines),
-                  "problems": [{"line_id": l.line_id, **c.to_dict()} for l, c in problems]}
+                  "problems": [{"line_id": l.line_id, **c.to_dict()} for l, c in problems],
+                  "wait_min": estimate_wait_min(await self.repo.open_orders())}
         if session.cart and not problems:
             session.confirm_token = cart_token(session.cart)
             await self.repo.update_session(session_id, {"confirm_token": session.confirm_token})
