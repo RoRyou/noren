@@ -25,7 +25,9 @@ class Settings(BaseSettings):
     # 遅延の調整（None ならモデルの既定）：考える量の上限、話し終わりと判定する無音の長さ（ミリ秒）
     # 考える量は、許可リストにないプロジェクトでは変えられない（1007 "not allowlisted"、10/11 確認）
     live_thinking_budget: int | None = None
-    live_silence_ms: int | None = None
+    # 話し終わりの判定は 800 ms：既定では「karaage for me, ⏸ and a beer」の区切りで AI が話し始め、
+    # 画面ではその間マイクを止めるため後半が落ちた。800 ms は割り込み 0 件で、首音の中央値も既定より短かった（ZI-069）
+    live_silence_ms: int | None = 800
 
     @field_validator("live_thinking_budget", "live_silence_ms", mode="before")
     @classmethod
