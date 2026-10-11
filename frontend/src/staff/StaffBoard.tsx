@@ -15,13 +15,18 @@ const REASON_JA: Record<string, string> = {
 
 export function StaffBoard() {
   const [board, setBoard] = useState<any>({ orders: [], escalations: [], tables: [], notifications: [] });
+  const [metrics, setMetrics] = useState<any>(null);
+  const [audits, setAudits] = useState<any[]>([]);
   const [menu, setMenu] = useState<any[]>([]);
   const [flash, setFlash] = useState("");
   const [say, setSay] = useState("");
   const [agent, setAgent] = useState<any>(null);
 
   async function load() {
-    setBoard(await api.board());
+    const [b, m, a] = await Promise.all([api.board(), api.metrics(), api.audit()]);
+    setBoard(b);
+    setMetrics(m);
+    setAudits(a);
   }
 
   useEffect(() => {
@@ -33,6 +38,7 @@ export function StaffBoard() {
         setFlash(m.kind === "escalation_all" ? "全員：未対応の緊急があります" : "引き継ぎがあります");
       }
       if (m.type === "notification" && m.kind === "overdue") setFlash(`${m.payload.minutes} 分以上出ていない料理があります`);
+      if (m.type === "notification" && m.kind === "unpaid_bill") setFlash(m.payload?.minutes ? `${m.payload.minutes} 分以上お会計待ちのテーブルがあります` : "お会計待ちのテーブルがあります");
       void load();
     };
     return () => es.close();
@@ -49,6 +55,7 @@ export function StaffBoard() {
   const unpaid = board.orders.filter((o: any) => o.prepay && !o.paid);
   // 注文から時間がたっても出ていない料理（見回りが通知を出す）
   const late = new Map<string, number>(board.notifications.filter((n: any) => n.kind === "overdue").map((n: any) => [n.payload.line_id, n.payload.minutes]));
+  const unpaidBills = new Map<string, number>(board.notifications.filter((n: any) => n.kind === "unpaid_bill").map((n: any) => [n.payload?.session_id, n.payload?.minutes ?? 0]));
 
   return (
     <div className="staff">
@@ -130,6 +137,7 @@ export function StaffBoard() {
           {board.tables.map((t: any) => (
             <div key={t.id} className="tbl">
               <b>{t.table_no}番</b> {t.party_size} 名 · {t.status === "billing" ? "会計中" : "食事中"}
+              {unpaidBills.has(t.id) && <span className="tag">会計待ち {unpaidBills.get(t.id)} 分</span>}
               <div className="small">{t.guests.filter((g: any) => g.allergies.length || g.diets.length).map((g: any) => `${g.id}: ${[...g.allergies, ...g.diets].join("・")}`).join(" / ")}</div>
               <button onClick={async () => { await api.closeTable(t.id); await load(); }}>会計済み</button>
             </div>
@@ -145,6 +153,27 @@ export function StaffBoard() {
                 {m.name_ja}{m.remaining !== null ? `（残り ${m.remaining}）` : ""}
               </label>
             ))}
+          </div>
+          <h2>数字</h2>
+          {metrics && (
+            <div className="small">
+              <div>テーブル数：{metrics.tables}（完了：{metrics.tables_closed}）</div>
+              <div>無人で完了した割合：{Math.round(metrics.unattended_rate * 100)}%</div>
+              <div>引き継ぎ：{metrics.escalations} 件{Object.keys(metrics.escalations_by_reason || {}).length > 0 && `（${Object.entries(metrics.escalations_by_reason).map(([r, c]) => `${REASON_JA[r] ?? r}: ${c}`).join("、")}）`}</div>
+              <div>止めた件数：{metrics.blocked} 件{Object.keys(metrics.blocked_by_reason || {}).length > 0 && `（${Object.entries(metrics.blocked_by_reason).map(([r, c]) => `${r}: ${c}`).join("、")}）`}</div>
+              <div>断った料理：{metrics.lines_rejected} 件 / 取り消し：{metrics.lines_cancelled} 件</div>
+            </div>
+          )}
+          <h2>記録</h2>
+          <div className="small">
+            {audits.slice(0, 15).map((a: any, i: number) => {
+              const time = a.at ? a.at.slice(11, 16) : "";
+              return (
+                <div key={i} className="small">
+                  {[time, a.actor, a.action, a.result, a.reason].filter(Boolean).join(" · ")}
+                </div>
+              );
+            })}
           </div>
         </section>
       </div>

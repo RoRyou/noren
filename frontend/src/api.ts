@@ -88,6 +88,7 @@ export const api = {
   markPaid: (oid: string) => call<any>("POST", `/api/staff/orders/${oid}/paid`),
   soldOut: (item_ids: string[], sold_out: boolean) => call<any>("POST", "/api/staff/sold_out", { item_ids, sold_out }),
   audit: () => call<any[]>("GET", "/api/staff/audit"),
+  metrics: () => call<any>("GET", "/api/staff/metrics"),
   storeAgent: (text: string) => call<any>("POST", "/api/staff/agent", { text }),
   storeAgentConfirm: (pending_id: string) => call<any>("POST", `/api/staff/agent/${pending_id}/confirm`),
 };

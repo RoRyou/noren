@@ -352,6 +352,73 @@ class Repo:
             out.append(snap.to_dict())
         return out
 
+    async def metrics(self) -> dict:
+        """店員の画面と提出資料の数字：テーブル・注文・引き継ぎ・止めた件数（全件を数える。デモの規模なら十分速い）。"""
+        sessions = []
+        async for snap in self.col("sessions").stream():
+            sessions.append(snap.to_dict())
+        tables = len(sessions)
+        tables_closed = sum(1 for s in sessions if s.get("status") == "closed")
+
+        orders_count = 0
+        lines_count = 0
+        lines_rejected = 0
+        lines_cancelled = 0
+        async for snap in self.col("orders").stream():
+            orders_count += 1
+            o = snap.to_dict()
+            for l in o.get("lines", []):
+                lines_count += 1
+                st = l.get("status")
+                if st == "rejected":
+                    lines_rejected += 1
+                elif st == "cancelled":
+                    lines_cancelled += 1
+
+        escalations_count = 0
+        escalations_by_reason: dict[str, int] = {}
+        urgent_escalations = 0
+        escalated_session_ids = set()
+        async for snap in self.col("escalations").stream():
+            escalations_count += 1
+            e = snap.to_dict()
+            sid = e.get("session_id")
+            if sid:
+                escalated_session_ids.add(sid)
+            reason = e.get("reason", "")
+            escalations_by_reason[reason] = escalations_by_reason.get(reason, 0) + 1
+            if e.get("urgent"):
+                urgent_escalations += 1
+
+        tables_without_staff = sum(1 for s in sessions if s.get("id") not in escalated_session_ids)
+        unattended_rate = round(tables_without_staff / tables, 2) if tables else 0.0
+
+        blocked = 0
+        blocked_by_reason: dict[str, int] = {}
+        async for snap in self.col("audit_logs").stream():
+            log = snap.to_dict()
+            if log.get("result") != "blocked":  # 記録の結果は ok / allowed / drafted / applied などもある
+                continue
+            blocked += 1
+            for r in (log.get("reason") or "blocked").split(","):
+                blocked_by_reason[r] = blocked_by_reason.get(r, 0) + 1
+
+        return {
+            "tables": tables,
+            "tables_closed": tables_closed,
+            "orders": orders_count,
+            "lines": lines_count,
+            "lines_rejected": lines_rejected,
+            "lines_cancelled": lines_cancelled,
+            "escalations": escalations_count,
+            "escalations_by_reason": escalations_by_reason,
+            "urgent_escalations": urgent_escalations,
+            "tables_without_staff": tables_without_staff,
+            "unattended_rate": unattended_rate,
+            "blocked": blocked,
+            "blocked_by_reason": blocked_by_reason,
+        }
+
 
 def make_client(project: str) -> firestore.AsyncClient:
     return firestore.AsyncClient(project=project)

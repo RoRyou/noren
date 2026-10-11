@@ -302,9 +302,14 @@ async def store_agent_confirm(pending_id: str, ctx: Ctx = Depends(http_ctx)) -> 
     return result
 
 
+@router.get("/staff/metrics")
+async def metrics(ctx: Ctx = Depends(http_ctx)) -> dict:
+    return await ctx.repo.metrics()
+
+
 @router.get("/staff/audit")
 async def audit(ctx: Ctx = Depends(http_ctx)) -> list[dict]:
-    return await ctx.repo.audit_logs()
+    return await ctx.repo.audit_logs(50)
 
 
 @router.get("/staff/stream")

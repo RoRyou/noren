@@ -274,3 +274,19 @@ async def test_tick_notifies_overdue_once(env):
     assert await dispatcher.tick(repo, "19:26", later) == 0  # 同じ料理は 1 回だけ
     staff = await repo.unacked_notifications("staff")
     assert [n["kind"] for n in staff if n["kind"] == "overdue"] == ["overdue"]
+
+
+async def test_metrics_summary(env):
+    svc, repo, *_ = env
+    s = await seat_dialogue1(svc)
+    await svc.add_to_cart(s.id, "s_edamame", 1)
+    rb = await svc.read_back(s.id)
+    await svc.submit(s.id, rb["confirm_token"], "k_metrics")
+    await svc.escalate(s.id, Reason.dietary_check, "エビフライの確認")
+
+    m = await repo.metrics()
+    assert m["tables"] == 1
+    assert m["orders"] == 1
+    assert m["escalations"] == 1
+    assert m["escalations_by_reason"] == {Reason.dietary_check.value: 1}
+    assert m["unattended_rate"] == 0.0
