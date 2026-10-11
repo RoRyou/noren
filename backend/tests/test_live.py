@@ -76,7 +76,7 @@ async def test_claimed_add_without_tool_is_corrected_once():
 async def test_claim_is_fine_after_add_item_or_screen_tap():
     v = await _voice()
     v._new_turn()
-    v._turn_text, v._turn_tool_names = "枝豆をカートに入れました。", ["add_item"]
+    v._turn_text, v._turn_tool_names, v._turn_added_ok = "枝豆をカートに入れました。", ["add_item"], True
     await v._check_claims()
     v._new_turn(screen=True)  # 画面で入れた料理について話すのは正しい
     v._turn_text = "I've added the beer for Guest 2."
@@ -85,3 +85,12 @@ async def test_claim_is_fine_after_add_item_or_screen_tap():
     v._turn_text = "You have edamame in your cart. Shall I place the order?"
     await v._check_claims()
     assert v.queue.sent == []
+
+
+async def test_claim_after_rejected_add_is_corrected():
+    """add_item は呼んだが断られた（数量の上限など）のに「入れました」と言った → 直させる。"""
+    v = await _voice()
+    v._new_turn()
+    v._turn_text, v._turn_tool_names = "I've added 30 edamame to your cart.", ["add_item"]
+    await v._check_claims()
+    assert len(v.queue.sent) == 1

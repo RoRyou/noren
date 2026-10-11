@@ -44,7 +44,8 @@ def store_facts() -> str:
              + (", 人気" if i.popularity >= 70 else "") for i in menu.values()]
     lines += [f"- 知識: {k['text'].ja}" for k in KNOWLEDGE]
     store = build_store()
-    lines.append(f"- 店のルール: お通し（{store.otoshi_label.ja}）お一人 {store.otoshi_price} 円、ラストオーダー {store.last_order}")
+    lines.append(f"- 店のルール: お通し（{store.otoshi_label.ja}）お一人 {store.otoshi_price} 円、ラストオーダー {store.last_order}、"
+                 f"1 品の数量の上限 {store.max_qty_per_line}")
     lines += [f"- 店のルール: {r['text']['ja']}" for r in store.rules]
     lines += [f"- 店のルール: {v.ja}" for v in store.self_service.values()]
     return "\n".join(lines)

@@ -78,6 +78,7 @@ class VoiceSession:
         # 1 回の返答で話した文字と呼んだツール（「入れました」と言ったのに add_item を呼んでいない対策）
         self._turn_text = ""
         self._turn_tool_names: list[str] = []
+        self._turn_added_ok = False  # この返答で add_item / update_item が実際にカートを変えたか
         self._screen_turn = False
         self._claim_checked = False
 
@@ -199,7 +200,7 @@ class VoiceSession:
 
     def _new_turn(self, screen: bool = False) -> None:
         self._turn_tools = self._turn_spoke = self._nudged = False
-        self._turn_text, self._turn_tool_names = "", []
+        self._turn_text, self._turn_tool_names, self._turn_added_ok = "", [], False
         self._screen_turn, self._claim_checked = screen, False
         self._cancel_watch()
 
@@ -220,11 +221,12 @@ class VoiceSession:
             pass
 
     async def _check_claims(self) -> None:
-        """「カートに入れました」と言ったのに、この返答で add_item / update_item を呼んでいなければ、
+        """「カートに入れました」と言ったのに、この返答で add_item / update_item がカートを変えていなければ
+        （呼んでいない・断られた）、
         いまのカートを添えて 1 回だけ直させる（ZI-068。画面で入れた料理の返答は除く）。"""
         if self._claim_checked or self._screen_turn or not CLAIM_ADDED.search(self._turn_text):
             return
-        if any(n in ("add_item", "update_item") for n in self._turn_tool_names):
+        if self._turn_added_ok:
             return
         self._claim_checked = True
         if not self.queue or self.closed.is_set():
@@ -286,6 +288,10 @@ class VoiceSession:
                     self.metrics["tool_calls"].append(fc.name)
                     self._turn_tools = True
                     self._turn_tool_names.append(fc.name)
+                for fr in ev.get_function_responses():
+                    r = fr.response or {}
+                    if (fr.name == "add_item" and r.get("decision") == "ok") or (fr.name == "update_item" and r.get("ok")):
+                        self._turn_added_ok = True
                     self._turn_spoke = False  # 見るのはツールの後に話したかどうか
                     self._cancel_watch()
                 if ev.content and ev.content.parts:
