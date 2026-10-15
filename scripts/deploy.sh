@@ -33,7 +33,7 @@ step "API を有効にする"
 g services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
   firestore.googleapis.com cloudtasks.googleapis.com cloudscheduler.googleapis.com aiplatform.googleapis.com
 
-step "Firestore（ネイティブモード、$REGION）"
+step "Firestore（ネイティブモード、${REGION}）"
 g firestore databases describe --database='(default)' >/dev/null 2>&1 \
   || g firestore databases create --database='(default)' --location="$REGION" --type=firestore-native
 
