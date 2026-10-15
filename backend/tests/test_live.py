@@ -29,6 +29,8 @@ async def test_idle_close_waits_while_ai_is_busy():
 
 
 class _Repo:
+    store_id = "test"
+
     async def session(self, _):
         from app.domain.models import CartLine, TableSession
 
@@ -133,3 +135,27 @@ def test_spoken_items_found_in_order():
     assert spoken_items("How about our Edamame or the Smashed cucumber?", m, "en") == ["s_edamame", "s_cucumber"]
     assert spoken_items("焼き鳥はいかがですか", m, "ja") == ["g_yakitori"]
     assert spoken_items("ご注文ありがとうございます", m, "ja") == []
+
+
+async def test_mention_guard_quiet_when_ai_is_already_asking():
+    """お客様が「大豆アレルギー」と言い、AI が「どちらの方ですか？」と聞いている返答では、重ねて促さない（ZI-085）。"""
+    v = await _voice()
+
+    class Repo2(_Repo):
+        async def session(self, _):
+            from app.domain.models import Guest, TableSession
+
+            return TableSession(id="s", store_id="d", table_no="1", party_size=2, lang="ja",
+                                guests=[Guest(id="g1", label="ゲスト 1"), Guest(id="g2", label="ゲスト 2")])
+
+    v.svc.repo = Repo2()
+    v._new_turn()
+    v._mentions = ({"soybean"}, set())
+    v._turn_text = "大豆アレルギーですね。どちらの方のアレルギーでしょうか？"
+    await v._check_mentions()
+    assert v.queue.sent == []
+    v._new_turn()
+    v._mentions = ({"soybean"}, set())
+    v._turn_text = "ご注文ありがとうございます。"
+    await v._check_mentions()
+    assert len(v.queue.sent) == 1

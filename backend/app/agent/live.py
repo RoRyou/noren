@@ -416,6 +416,10 @@ class VoiceSession:
             missing_a, missing_d = allergens - known_a, diets - known_d
             if missing_a or missing_d:
                 await self.emit({"type": "confirm_declaration", "allergies": sorted(missing_a), "diets": sorted(missing_d)})
+                said = self._turn_text.lower()
+                handling = any(w in said for w in ("アレルギー", "allerg", "食べられ", "苦手", "制限", "どちらの方", "which guest"))
+                if handling:  # AI がこの返答でもう確かめている（どなたの分か・重さを聞いている）→ 重ねて促さない（ZI-085）
+                    return
                 if self.queue and not self.closed.is_set():  # 画面で押させず、AI に会話で確かめさせる（ZI-079）
                     words = "、".join(sorted(missing_a) + sorted(missing_d))
                     self.queue.send_content(types.Content(role="user", parts=[types.Part(text=(
