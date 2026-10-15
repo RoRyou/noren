@@ -392,6 +392,9 @@ def test_menu_search_matches_words_and_ranks():
     assert match_score(MENU["g_mapo"], "mapo tofu") == 100
     assert match_score(MENU["g_buta_kimchi"], "辛い") == 100
     assert match_score(MENU["ds_matcha_ice"], "pizza") == 0
+    assert match_score(MENU["g_maguro"], "マグロ") == 100  # カタカナでもひらがなの料理名が見つかる
+    assert match_score(MENU["g_saba"], "サバ") == 100
+    assert match_score(MENU["g_saba"], "マグロ") == 0
 
 
 def test_keyword_guard_only_near_allergy_words():

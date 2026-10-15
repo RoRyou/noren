@@ -57,6 +57,7 @@ class MenuItem(BaseModel):
     option_groups: list[OptionGroup] = []
     category: str  # drink / snack / fried / grill / rice / dessert など
     description: Localized | None = None
+    search_terms: str = ""  # 検索用の読み（ひらがな）など。「からあげ」で唐揚げが見つかるように
     how_to_eat: Localized | None = None
     portion: Localized | None = None
     photo_url: str = ""

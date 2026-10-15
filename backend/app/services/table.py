@@ -49,13 +49,19 @@ def _tokens(text: str) -> list[str]:
     return [w[:-1] if len(w) > 3 and w.endswith("s") else w for w in words if w not in STOPWORDS]
 
 
+def _kana(text: str) -> str:
+    """カタカナをひらがなにそろえる（「マグロ」で「まぐろの刺身」が見つかるように。音声の文字起こしはカタカナが多い）。"""
+    return "".join(chr(ord(c) - 0x60) if "ァ" <= c <= "ヶ" else c for c in text)
+
+
 def match_score(item: MenuItem, query: str) -> int:
     """料理名・説明・食材に、検索語がどれだけ当たるか（0 は当たらない）。「chicken skewers」でも焼き鳥が見つかる。"""
-    texts = [item.name.ja, item.name.en, item.name.zh_hans, item.name.zh_hant, item.name.ko, " ".join(item.ingredients)]
+    texts = [item.name.ja, item.name.en, item.name.zh_hans, item.name.zh_hant, item.name.ko, " ".join(item.ingredients),
+             item.search_terms]
     if item.description:
         texts += [item.description.ja, item.description.en]
-    hay = " ".join(t for t in texts if t).lower()
-    q = query.lower().strip()
+    hay = _kana(" ".join(t for t in texts if t).lower())
+    q = _kana(query.lower().strip())
     if q and q in hay:
         return 100  # そのまま含まれる（日本語の料理名など）
     words = set(_tokens(hay))

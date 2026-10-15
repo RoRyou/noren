@@ -104,6 +104,18 @@ DESCRIPTIONS: dict[str, Localized] = {
 }
 
 
+# 料理名の読み（音声の文字起こしはカタカナ・ひらがなで来ることが多い）
+READINGS: dict[str, str] = {
+    "d_beer": "なまびーる びーる", "d_highball": "はいぼーる", "d_sake": "にほんしゅ さけ", "d_yuzu_sour": "ゆずさわー",
+    "d_oolong": "うーろんちゃ", "d_yuzu_soda": "ゆずそーだ", "s_edamame": "えだまめ", "s_hiyayakko": "ひややっこ",
+    "s_cucumber": "たたききゅうり", "s_dashimaki": "だしまきたまご たまごやき", "f_karaage": "からあげ とりのからあげ",
+    "f_ebi_ten": "えびてん えびのてんぷら てんぷら", "f_fries": "ふらいどぽてと ぽてと", "f_agedashi": "あげだしどうふ",
+    "g_yakitori": "やきとり", "g_saba": "さばのしおやき さば", "g_buta_kimchi": "ぶたきむち きむち", "g_mapo": "まーぼーどうふ まぼどうふ",
+    "g_maguro": "まぐろのさしみ まぐろ さしみ", "r_ochazuke": "さけちゃづけ おちゃづけ ちゃづけ", "r_onigiri": "やきおにぎり おにぎり",
+    "ds_matcha_ice": "まっちゃあいす あいす",
+}
+
+
 def build_menu() -> dict[str, MenuItem]:
     items: dict[str, MenuItem] = {}
     for item_id, name, price, category, ingredients, extra in RAW:
@@ -113,7 +125,7 @@ def build_menu() -> dict[str, MenuItem]:
             allergens=sorted(conv.allergens), maybe_allergens=sorted(conv.maybe_allergens), diet_tags=sorted(conv.tags),
             allergen_status=AllergenStatus.confirmed if conv.complete else AllergenStatus.unconfirmed,
             allergen_confirmed_by=CONFIRMED_BY if conv.complete else "", allergen_confirmed_at=CONFIRMED_AT if conv.complete else "",
-            photo_url=f"/media/menu/{item_id}.jpg", published=True, **{"description": DESCRIPTIONS.get(item_id), **extra},
+            photo_url=f"/media/menu/{item_id}.jpg", published=True, **{"description": DESCRIPTIONS.get(item_id), "search_terms": READINGS.get(item_id, ""), **extra},
         )
     # 同じフライヤー：ほかの揚げ物のアレルゲン（確定・可能性）を混入の可能性として持たせる
     for item_id in FRYER_SHARED:
