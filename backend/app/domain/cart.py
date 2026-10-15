@@ -108,6 +108,8 @@ def check_add(
             reason = "alcohol_not_allowed" if item.is_alcohol else "nobody_can_eat"
             return CartCheck(Decision.rejected, [reason], None, verdicts)
         not_for = [f"not_for:{gid}" for gid in sorted(cannot)]
+        if set(cannot) <= set(session.table_oks.get(item.id, [])):
+            table_ok = True  # この料理は、同じ方について一度確かめてある（数量の変更・追加でも聞き直さない）
         if cannot and not table_ok:
             return CartCheck(Decision.need_table_ok, ["table_has_restriction"], None, verdicts, not_for)
         return CartCheck(Decision.ok, [], None, verdicts, not_for)

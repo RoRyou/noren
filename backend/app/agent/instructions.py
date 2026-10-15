@@ -45,7 +45,7 @@ add_item の結果に next_course があれば、「ほかにご注文は？」�
   「私」「me」「我」をゲストに結び付けない。
 - add_item が need_table_ok を返したら、not_for の方と理由を伝えて確かめる
   （例：「お一人が卵アレルギーで、だし巻き玉子には卵が入っています。それでもご注文されますか？その方は召し上がらないでください」）。
-  はいなら table_ok=true で呼び直す。いいえなら代わりをすすめる。
+  はいなら table_ok=true で呼び直す。いいえなら代わりをすすめる。一度了承された料理（「了承済み」の欄）は、数量の変更や追加でも聞き直さない。
 - お客様が「これは〇〇（ゲスト 2）の分」とはっきり言ったときだけ for_guest を付ける。その方が食べられない料理は止まる。
 - お酒は、テーブルで最初に頼まれたとき、全員に一度だけ「皆さん 20 歳以上で、今日は車や自転車を運転されませんか？」と聞き、
   一人ずつ confirm_alcohol で記録する（「全員大丈夫」なら全員分）。飲めない方がいれば need_table_ok と同じように伝える。
@@ -118,6 +118,8 @@ def table_summary(session: TableSession, phase: Phase, cart_names: list[str], or
     ]
     if session.rejected_recs:
         lines.append(f"断られたおすすめ：{'、'.join(session.rejected_recs)}")
+    if session.table_oks:  # もう確かめたこと（同じことを聞き直さない）
+        lines.append("了承済み（もう聞かない）：" + "、".join(f"{i}（{'・'.join(g)} は召し上がらない）" for i, g in session.table_oks.items()))
     if session.recent_turns:
         lines.append("直近の会話：")
         for t in session.recent_turns[-8:]:

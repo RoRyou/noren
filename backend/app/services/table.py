@@ -41,7 +41,8 @@ def _cart_lock(session_id: str) -> asyncio.Lock:
 
 
 def _cart_fields(session: TableSession) -> dict:
-    return {"cart": [l.model_dump(mode="json") for l in session.cart], "confirm_token": session.confirm_token}
+    return {"cart": [l.model_dump(mode="json") for l in session.cart], "confirm_token": session.confirm_token,
+            "table_oks": session.table_oks}
 
 
 STOPWORDS = {"the", "a", "an", "of", "and", "with", "some", "any", "do", "you", "have", "is", "there", "please", "menu"}
@@ -149,6 +150,8 @@ class TableService:
             check = check_add(session, store, item, total, for_guest, clock, options, table_ok)
             if check.ok:
                 not_for = [w.split(":", 1)[1] for w in check.warnings if w.startswith("not_for:")]
+                if not_for:  # 了承を覚える
+                    session.table_oks[item_id] = sorted(set(session.table_oks.get(item_id, [])) | set(not_for))
                 if existing:
                     existing.qty = total
                     existing.for_guest = check.for_guest

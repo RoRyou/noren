@@ -172,6 +172,8 @@ class TableSession(BaseModel):
     recommended: list[str] = []  # 表示済みのおすすめ
     accepted_recs: list[str] = []
     rejected_recs: list[str] = []
+    # テーブルとして了承済みの料理：料理 id → 召し上がらないと確かめたゲスト（同じことを二度聞かない。会話が開き直しても残る）
+    table_oks: dict[str, list[str]] = {}
     recent_turns: list[dict] = []  # 直近の会話（role, text）
     usage: dict[str, int] = {}
     status: SessionStatus = SessionStatus.dining

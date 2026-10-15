@@ -397,3 +397,20 @@ async def test_declare_and_add_at_the_same_time_keep_both(env):
                          svc.add_to_cart(s.id, "g_yakitori", 1, "g2"))
     s2 = await repo.session(s.id)
     assert s2.guest("g2").allergies == ["shrimp"] and all(g.declared for g in s2.guests)
+
+
+async def test_table_ok_is_remembered(env):
+    """一度「それでも頼む」と了承した料理は、数量の変更・追加注文で聞き直さない（ZI-082）。"""
+    svc, repo, *_ = env
+    s = await svc.seat("12", 2, "ja")
+    await svc.declare(s.id, [{"guest_id": "g1", "allergies": ["egg"]}, {"guest_id": "g2"}])
+    check, _ = await svc.add_to_cart(s.id, "f_karaage", 2)
+    assert check.decision == Decision.need_table_ok
+    check, s2 = await svc.add_to_cart(s.id, "f_karaage", 2, table_ok=True)
+    assert check.ok
+    line = s2.cart[0]
+    check, _ = await svc.update_line(s.id, line.line_id, 1)  # 数量を変えても聞かない
+    assert check.ok
+    check, _ = await svc.add_to_cart(s.id, "f_karaage", 1)  # もう 1 つ頼んでも聞かない
+    assert check.ok
+    assert (await repo.session(s.id)).table_oks == {"f_karaage": ["g1"]}
