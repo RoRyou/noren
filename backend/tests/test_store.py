@@ -337,3 +337,14 @@ async def test_agent_tool_errors_do_not_break_the_session(env):
     assert (await tools["update_item"]("s_edamame", 3))["ok"] is True  # 料理の id で数量を変える
     assert (await repo.session(s.id)).cart[0].qty == 3
     assert (await tools["update_item"]("f_karaage", 0))["error"] == "unknown_line_id"
+
+
+async def test_parallel_adds_to_same_table_all_succeed(env):
+    """AI が add_item を同時に 3 回呼んでも、全部カートに入る（ZI-075）。"""
+    svc, repo, *_ = env
+    s = await svc.seat("8", 3, "en")
+    await svc.declare(s.id, [{"guest_id": "g1"}, {"guest_id": "g2"}, {"guest_id": "g3"}])
+    results = await asyncio.gather(*(svc.add_to_cart(s.id, item, 1, g)
+                                     for item, g in [("s_edamame", "g1"), ("s_cucumber", "g2"), ("g_yakitori", "g3")]))
+    assert all(c.ok for c, _ in results)
+    assert sorted(l.item_id for l in (await repo.session(s.id)).cart) == ["g_yakitori", "s_cucumber", "s_edamame"]

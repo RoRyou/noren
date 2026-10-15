@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 
 import uuid
@@ -28,6 +29,15 @@ def now_hhmm() -> str:
 
 def _dump(m) -> dict:
     return m.model_dump(by_alias=True, mode="json")
+
+
+# 同じテーブルのカートへの書き込みは 1 つずつ（AI が add_item を同時に何回も呼ぶと、トランザクションが
+# 互いに取り合って失敗した：ZI-075）。前提：Cloud Run は 1 インスタンス（ZI-045 と同じ）
+_CART_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _cart_lock(session_id: str) -> asyncio.Lock:
+    return _CART_LOCKS.setdefault(session_id, asyncio.Lock())
 
 
 STOPWORDS = {"the", "a", "an", "of", "and", "with", "some", "any", "do", "you", "have", "is", "there", "please", "menu"}
@@ -128,7 +138,8 @@ class TableService:
                 transaction.set(session_ref, _dump(session))
             return check, session
 
-        check, session = await txn(self.repo.db.transaction(max_attempts=10))
+        async with _cart_lock(session_id):
+            check, session = await txn(self.repo.db.transaction(max_attempts=10))
         await self.repo.audit(actor, "add_item", {"item_id": item_id, "qty": qty, "for_guest": for_guest},
                               "allowed" if check.ok else "blocked", reason=",".join(check.reasons),
                               correlation_id=correlation_id, session_id=session_id)
@@ -159,7 +170,8 @@ class TableService:
                 transaction.set(session_ref, _dump(session))
             return check, session
 
-        check, session = await txn(self.repo.db.transaction(max_attempts=10))
+        async with _cart_lock(session_id):
+            check, session = await txn(self.repo.db.transaction(max_attempts=10))
         await self.repo.audit(actor, "update_item" if qty > 0 else "remove_item", {"line_id": line_id, "qty": qty},
                               "allowed" if check is None or check.ok else "blocked",
                               reason=",".join(check.reasons) if check else "", session_id=session_id)
