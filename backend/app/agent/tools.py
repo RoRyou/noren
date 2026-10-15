@@ -85,7 +85,8 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
     recent: dict[str, tuple[float, dict]] = {}
     read_back_at: list[int] = []  # 復唱したときの heard()
     calls: list[int] = []  # [この返答で呼んだ回数, そのときの heard()]
-    pending_adds: list[dict] = []  # 申告の前に頼まれた料理（申告が終わったら自動で入れる。ZI-084）
+    pending_adds: list[dict] = []  # 申告・お酒の確認の前に頼まれた料理（確認がそろったら自動で入れる。ZI-084、ZI-087）
+    flushed: dict[tuple, int] = {}  # 自動で入れた注文 → そのときの heard()（AI が同じ返答で呼び直しても二重に入れない）
 
     async def run(name: str, args: dict, body: Callable[[], Awaitable[dict]]) -> dict:
         key = name + json.dumps(args, sort_keys=True, ensure_ascii=False)
@@ -179,26 +180,40 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             await emit({"type": "guests_updated", "guests": [x.model_dump() for x in s.guests]})
             out = {"ok": True, "guest": s.guest(guest_id).model_dump(), "escalated": severe}
             if pending_adds and all(g.declared for g in s.guests):  # 申告の前に頼まれた料理を入れる
-                menu = await svc.repo.menu()
-                added = []
-                for p in list(pending_adds):
-                    check, s = await svc.add_to_cart(session_id, p["item_id"], p["qty"], p["for_guest"], p["options"],
-                                                     actor="reception_agent", correlation_id=correlation())
-                    name = menu[p["item_id"]].name.ja if p["item_id"] in menu else p["item_id"]
-                    added.append({"item": name, "qty": p["qty"], **check.to_dict()})
-                pending_adds.clear()
-                await emit({"type": "cart", "cart": [l.model_dump() for l in s.cart]})
-                out["pending_orders"] = added
-                out["note"] = "申告の前に頼まれた料理を処理した。decision が ok ならカートに入れたと伝え、need_* ならその確認をする"
+                await flush_pending(out)
             return out
         return await run("set_dietary_profile", {"guest_id": guest_id, "allergies": allergies, "diets": diets, "severe": severe}, body)
 
+    async def flush_pending(out: dict) -> None:
+        """確認待ちだった注文を入れ直し、結果を out に付ける（申告・お酒の確認がそろった後）。"""
+        menu = await svc.repo.menu()
+        added, keep = [], []
+        s = None
+        for p in list(pending_adds):
+            check, s = await svc.add_to_cart(session_id, p["item_id"], p["qty"], p["for_guest"], p["options"],
+                                             actor="reception_agent", correlation_id=correlation())
+            name = menu[p["item_id"]].name.ja if p["item_id"] in menu else p["item_id"]
+            added.append({"item": name, "qty": p["qty"], **check.to_dict()})
+            if check.ok:
+                flushed[(p["item_id"], p["qty"], p["for_guest"], tuple(sorted((p["options"] or {}).items())))] = heard()
+            if check.decision in (Decision.need_declaration, Decision.need_alcohol_check):
+                keep.append(p)  # まだ確認が足りない（ほかの方の答え待ち）
+        pending_adds[:] = keep
+        if s is not None:
+            await emit({"type": "cart", "cart": [l.model_dump() for l in s.cart]})
+        out["pending_orders"] = added
+        out["note"] = "確認待ちだった注文を処理した。decision が ok ならカートに入れたと伝える（add_item を呼び直さない）。need_* ならその確認をする"
+
     async def confirm_alcohol(guest_id: str, adult: bool, driving: bool) -> dict:
-        """お酒の確認：その方が 20 歳以上か（adult）、今日運転するか（driving）を、会話で聞いた答えのとおり記録する（自己申告）。"""
+        """お酒の確認：その方が 20 歳以上か（adult）、今日運転するか（driving）を、会話で聞いた答えのとおり記録する（自己申告）。
+        確認がそろうと、確認待ちだったお酒はコードがカートに入れる（結果は pending_orders）。"""
         async def body():
             s = await svc.set_alcohol(session_id, guest_id, adult, driving)
             await emit({"type": "guests_updated", "guests": [x.model_dump() for x in s.guests]})
-            return {"ok": True, "can_drink": adult and not driving}
+            out = {"ok": True, "can_drink": adult and not driving}
+            if pending_adds and all(g.alcohol is not None for g in s.guests) and all(g.declared for g in s.guests):
+                await flush_pending(out)
+            return out
         return await run("confirm_alcohol", {"guest_id": guest_id, "adult": adult, "driving": driving}, body)
 
     async def add_item(item_id: str, qty: int = 1, for_guest: str = "", options: list[str] | None = None,
@@ -207,14 +222,19 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
         options は料理の選択肢を "グループ=選択肢" の形で（例：["size=large"]）。選ばなければ既定の選択肢になる。
         結果の decision に従う：ok / need_table_ok（食べられない・飲めない方がいる。not_for の方を伝えて
         「それでもご注文されますか？」と聞き、はいなら table_ok=true で呼び直す）/ need_alcohol_check（全員に 20 歳以上か・
-        今日運転しないかを聞き、confirm_alcohol で記録してから呼び直す）/ need_staff（店員の確認が必要）/
+        今日運転しないかを聞き、confirm_alcohol で記録する。確認がそろえばコードが入れるので呼び直さない）/ need_staff（店員の確認が必要）/
         need_declaration（申告がまだ）/ rejected（理由と代わりの料理 alternatives を伝える）。"""
         async def body():
             opts = dict(o.split("=", 1) for o in (options or []) if "=" in o)
+            if flushed.get((item_id, qty, for_guest or None, tuple(sorted(opts.items())))) == heard():
+                s = await svc.repo.session(session_id)
+                menu = await svc.repo.menu()
+                return {"decision": "ok", "note": "確認の後にコードがもう入れてある（二重に入れていない）",
+                        "cart_now": cart_text(s.cart, menu)}
             check, s = await svc.add_to_cart(session_id, item_id, qty, for_guest or None, opts or None,
                                              actor="reception_agent", correlation_id=correlation(), table_ok=table_ok)
             out = check.to_dict()
-            if check.decision == Decision.need_declaration:
+            if check.decision in (Decision.need_declaration, Decision.need_alcohol_check):
                 pending_adds.append({"item_id": item_id, "qty": qty, "for_guest": for_guest or None, "options": opts or None})
                 out["note"] = "まだ食べられないものを聞いていない方がいる。聞いて set_dietary_profile で記録すると、この注文は自動でカートに入る"
             cannot = [w.split(":", 1)[1] for w in check.warnings if w.startswith("not_for:")]

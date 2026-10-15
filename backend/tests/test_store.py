@@ -452,3 +452,40 @@ async def test_read_back_waits_after_asking_a_question(env):
     assert (await tools["read_back"]())["reason"] == "wait_for_answer"
     said[0] = "かしこまりました。"  # お客様が答えた後の返答
     assert "confirm_token" in await tools["read_back"]()
+
+
+async def test_alcohol_added_after_everyone_confirms(env):
+    """お酒の確認待ちの注文は、全員の確認がそろったらコードが入れる（AI が入れ直し忘れない。ZI-087）。"""
+    from app.agent.tools import build_tools
+
+    svc, repo, *_ = env
+    s = await svc.seat("15", 2, "ja")
+    await svc.declare(s.id, [{"guest_id": "g1"}, {"guest_id": "g2"}])
+
+    async def emit(_):
+        pass
+
+    tools = {t.__name__: t for t in build_tools(svc, s.id, "ja", emit, lambda: "t")}
+    assert (await tools["add_item"]("d_beer", 1))["decision"] == "need_alcohol_check"
+    assert "pending_orders" not in await tools["confirm_alcohol"]("g1", True, False)
+    r = await tools["confirm_alcohol"]("g2", True, False)
+    assert [p["decision"] for p in r["pending_orders"]] == ["ok"]
+    assert [l.item_id for l in (await repo.session(s.id)).cart] == ["d_beer"]
+
+
+async def test_ai_recalling_add_after_auto_add_does_not_double(env):
+    """確認の後にコードが入れたお酒を、AI が同じ返答で add_item し直しても二重にならない（ZI-087）。"""
+    from app.agent.tools import build_tools
+
+    svc, repo, *_ = env
+    s = await svc.seat("16", 1, "ja")
+    await svc.declare(s.id, [{"guest_id": "g1"}])
+
+    async def emit(_):
+        pass
+
+    tools = {t.__name__: t for t in build_tools(svc, s.id, "ja", emit, lambda: "t", lambda: 3)}
+    await tools["add_item"]("d_beer", 1)
+    await tools["confirm_alcohol"]("g1", True, False)
+    assert (await tools["add_item"]("d_beer", 1))["decision"] == "ok"
+    assert [(l.item_id, l.qty) for l in (await repo.session(s.id)).cart] == [("d_beer", 1)]

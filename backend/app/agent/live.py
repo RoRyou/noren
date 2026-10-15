@@ -254,7 +254,9 @@ class VoiceSession:
             await asyncio.sleep(NUDGE_AFTER_S)
             # ツールの前にもうしっかり話していたなら、ツールの後に黙っても問題ない（促すと同じことを二度言う）。
             # 「確認します」程度の短い前置きだけなら促す
-            if not self._nudged and len(self._turn_text) < 40 and self.queue and not self.closed.is_set():
+            # 質問で終わっていれば（「？」）お客様の番。促すと答えを待たずに先へ進んでしまう（ZI-087）
+            asked = "？" in self._turn_text or "?" in self._turn_text
+            if not self._nudged and not asked and len(self._turn_text) < 40 and self.queue and not self.closed.is_set():
                 self._nudged = True
                 self.metrics["nudges"] += 1
                 log.info("silent after tools; nudging (%s)", self.correlation())
@@ -361,6 +363,8 @@ class VoiceSession:
                 for fr in ev.get_function_responses():
                     r = fr.response or {}
                     if (fr.name == "add_item" and r.get("decision") == "ok") or (fr.name == "update_item" and r.get("ok")):
+                        self._turn_added_ok = True
+                    if any(p.get("decision") == "ok" for p in r.get("pending_orders") or []):  # 確認の後にコードが入れた
                         self._turn_added_ok = True
                     self._turn_spoke = False  # 見るのはツールの後に話したかどうか
                     self._cancel_watch()

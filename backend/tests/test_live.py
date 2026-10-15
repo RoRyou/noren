@@ -159,3 +159,16 @@ async def test_mention_guard_quiet_when_ai_is_already_asking():
     v._turn_text = "ご注文ありがとうございます。"
     await v._check_mentions()
     assert len(v.queue.sent) == 1
+
+
+async def test_no_nudge_when_ai_ended_with_a_question(monkeypatch):
+    """AI が「他の方はいかがですか？」と聞いてからツールを呼んだ返答は、ツールの後に黙っても促さない（ZI-087）。"""
+    import app.agent.live as live
+
+    monkeypatch.setattr(live, "NUDGE_AFTER_S", 0.05)
+    v = await _voice()
+    v._new_turn()
+    v._turn_text = "ゲスト2の方は大豆アレルギーですね。他の方はいかがですか？"
+    v._watch = asyncio.create_task(v._after_tool_turn())
+    await asyncio.sleep(0.2)
+    assert v.queue.sent == []
