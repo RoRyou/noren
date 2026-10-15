@@ -75,9 +75,26 @@ RAW: list[tuple] = [
      dict(taste_tags=["rich"], popularity=45)),
     ("ds_matcha_ice", L("抹茶アイス", "Matcha ice cream", "抹茶冰淇淋", "抹茶冰淇淋", "말차 아이스크림"), 400, "dessert",
      ["抹茶", "牛乳", "生クリーム", "砂糖"], dict(taste_tags=["sweet"], popularity=50)),
+    # 秋の料理（季節限定）
+    ("g_sanma", L("さんまの塩焼き（秋限定）", "Grilled Pacific saury (autumn only)", "盐烤秋刀鱼（秋季限定）", "鹽烤秋刀魚（秋季限定）", "꽁치 소금구이（가을 한정）"), 780, "grill",
+     ["さんま", "塩", "大根", "すだち"], dict(taste_tags=["rich"], pairing_tags=["sake", "rice"], popularity=80, owner_weight=2,
+                                    how_to_eat=L("すだちを搾り、大根おろしと一緒に。骨に気をつけてください", "Squeeze the sudachi citrus and eat with grated daikon. Mind the bones"))),
+    ("g_chanchan", L("秋鮭のちゃんちゃん焼き", "Autumn salmon miso-butter grill", "味噌黄油烤秋鲑", "味噌奶油烤秋鮭", "가을 연어 된장버터구이"), 880, "grill",
+     ["鮭", "キャベツ", "玉ねぎ", "味噌", "バター"], dict(taste_tags=["rich"], pairing_tags=["beer", "rice"], popularity=60)),
+    ("f_kinoko_ten", L("きのこの天ぷら", "Mushroom tempura", "菌菇天妇罗", "菇類天婦羅", "버섯 튀김"), 620, "fried",
+     ["まいたけ", "しいたけ", "天ぷら粉", "塩"], dict(taste_tags=["light"], pairing_tags=["beer", "sake"], popularity=55)),
+    ("s_satoimo", L("里芋の煮っころがし", "Simmered taro", "炖芋头", "燉芋頭", "토란 조림"), 450, "snack",
+     ["里芋", "醤油", "みりん", "砂糖", "かつおだし"], dict(taste_tags=["sweet"], pairing_tags=["sake"], popularity=40)),
+    ("s_ginnan", L("銀杏の塩炒り", "Roasted ginkgo nuts with salt", "盐炒银杏", "鹽炒銀杏", "은행 소금볶음"), 420, "snack",
+     ["銀杏", "塩"], dict(taste_tags=["light"], pairing_tags=["sake"], popularity=35,
+                         portion=L("10 粒ほど", "About 10 nuts"))),
+    ("r_kurigohan", L("栗ご飯（秋限定）", "Chestnut rice (autumn only)", "栗子饭（秋季限定）", "栗子飯（秋季限定）", "밤밥（가을 한정）"), 480, "rice",
+     ["ご飯", "栗", "塩"], dict(taste_tags=["sweet"], popularity=60, owner_weight=1)),
+    ("ds_kabocha", L("かぼちゃプリン", "Pumpkin pudding", "南瓜布丁", "南瓜布丁", "단호박 푸딩"), 450, "dessert",
+     ["かぼちゃ", "卵", "牛乳", "生クリーム", "砂糖"], dict(taste_tags=["sweet"], popularity=50)),
 ]
 
-FRYER_SHARED = ["f_karaage", "f_ebi_ten", "f_fries", "f_agedashi"]  # 同じ油で揚げる
+FRYER_SHARED = ["f_kinoko_ten", "f_karaage", "f_ebi_ten", "f_fries", "f_agedashi"]  # 同じ油で揚げる
 
 
 # 料理の一般的な説明（訪日客向け。店の事実は書かない）。検索でも使う（「chicken skewers」→ 焼き鳥）
@@ -101,6 +118,13 @@ DESCRIPTIONS: dict[str, Localized] = {
     "r_ochazuke": L("ご飯に鮭をのせ、お茶をかけたもの", "Rice with salmon, topped with hot tea"),
     "r_onigiri": L("醤油を塗って焼いたおにぎり", "Rice ball grilled with soy sauce"),
     "ds_matcha_ice": L("抹茶のアイスクリーム", "Green tea ice cream"),
+    "g_sanma": L("秋が旬のさんまを丸ごと塩焼きに", "Whole Pacific saury, salt-grilled — an autumn classic"),
+    "g_chanchan": L("鮭と野菜を味噌とバターで蒸し焼きに（北海道の郷土料理）", "Salmon and vegetables steamed with miso and butter, a Hokkaido dish"),
+    "f_kinoko_ten": L("まいたけとしいたけの天ぷら", "Maitake and shiitake mushrooms in light batter"),
+    "s_satoimo": L("里芋を甘辛く煮たもの", "Taro simmered in a sweet soy broth"),
+    "s_ginnan": L("いちょうの実を炒って塩をふったもの", "Ginkgo nuts roasted with salt"),
+    "r_kurigohan": L("栗を炊き込んだご飯", "Rice cooked with chestnuts"),
+    "ds_kabocha": L("かぼちゃのなめらかなプリン", "Smooth pumpkin custard pudding"),
 }
 
 
@@ -113,6 +137,9 @@ READINGS: dict[str, str] = {
     "g_yakitori": "やきとり", "g_saba": "さばのしおやき さば", "g_buta_kimchi": "ぶたきむち きむち", "g_mapo": "まーぼーどうふ まぼどうふ",
     "g_maguro": "まぐろのさしみ まぐろ さしみ", "r_ochazuke": "さけちゃづけ おちゃづけ ちゃづけ", "r_onigiri": "やきおにぎり おにぎり",
     "ds_matcha_ice": "まっちゃあいす あいす",
+    "g_sanma": "さんまのしおやき さんま", "g_chanchan": "ちゃんちゃんやき さけ しゃけ", "f_kinoko_ten": "きのこのてんぷら きのこ てんぷら",
+    "s_satoimo": "さといものにっころがし さといも", "s_ginnan": "ぎんなん", "r_kurigohan": "くりごはん くり",
+    "ds_kabocha": "かぼちゃぷりん ぷりん",
 }
 
 
@@ -148,18 +175,18 @@ def build_store(store_id: str = "demo") -> StoreSettings:
         payment_timing="postpay",
         last_order="22:30",
         rules=[
-            {"key": "payment", "announce": True, "text": L("お支払いは現金・クレジットカード・QR コード決済が使えます", "We accept cash, credit cards and QR code payments").model_dump(by_alias=True)},
-            {"key": "tax", "announce": True, "text": L("表示価格はすべて税込です", "All prices include tax").model_dump(by_alias=True)},
-            {"key": "tipping", "announce": True, "text": L("チップは不要です", "No tipping needed").model_dump(by_alias=True)},
-            {"key": "split_bill", "announce": True, "text": L("お会計はテーブルごとにまとめてお願いします（画面で割り勘の金額は表示できます）", "One bill per table (the screen can show the split per person)").model_dump(by_alias=True)},
-            {"key": "allergy", "announce": False, "text": L("アレルギーや食事制限は必ずお知らせください。混入の可能性はゼロにはできません", "Please tell us about allergies or dietary needs. We cannot rule out cross-contact completely").model_dump(by_alias=True)},
-            {"key": "takeout", "announce": False, "text": L("衛生上、食べ残しのお持ち帰りはできません", "For hygiene reasons, leftovers cannot be taken home").model_dump(by_alias=True)},
-            {"key": "outside_food", "announce": False, "text": L("飲食物の持ち込みはご遠慮ください", "Please do not bring outside food or drinks").model_dump(by_alias=True)},
-            {"key": "smoking", "announce": False, "text": L("店内は全面禁煙です", "The restaurant is non-smoking").model_dump(by_alias=True)},
-            {"key": "photos", "announce": False, "text": L("料理の写真撮影は自由です。ほかのお客様は写さないでください", "Feel free to photograph your food; please don't photograph other guests").model_dump(by_alias=True)},
-            {"key": "busy", "announce": False, "text": L("混雑時は料理の提供に時間がかかることがあります", "Dishes may take longer when we are busy").model_dump(by_alias=True)},
+            {"key": "payment", "announce": True, "text": L("お支払いは現金・クレジットカード・QR コード決済が使えます", "We accept cash, credit cards and QR code payments", "可使用现金、信用卡和二维码支付", "可使用現金、信用卡和 QR Code 支付", "현금・신용카드・QR 코드 결제가 가능해요").model_dump(by_alias=True)},
+            {"key": "tax", "announce": True, "text": L("表示価格はすべて税込です", "All prices include tax", "所有价格均含税", "所有價格均含稅", "표시 가격은 모두 세금 포함이에요").model_dump(by_alias=True)},
+            {"key": "tipping", "announce": True, "text": L("チップは不要です", "No tipping needed", "无需支付小费", "無需支付小費", "팁은 필요 없어요").model_dump(by_alias=True)},
+            {"key": "split_bill", "announce": True, "text": L("お会計はテーブルごとにまとめてお願いします（画面で割り勘の金額は表示できます）", "One bill per table (the screen can show the split per person)", "每桌统一结账（屏幕可显示每人分摊金额）", "每桌統一結帳（螢幕可顯示每人分攤金額）", "계산은 테이블별로 한 번에 해 주세요（화면에서 1인당 금액을 볼 수 있어요）").model_dump(by_alias=True)},
+            {"key": "allergy", "announce": False, "text": L("アレルギーや食事制限は必ずお知らせください。混入の可能性はゼロにはできません", "Please tell us about allergies or dietary needs. We cannot rule out cross-contact completely", "如有过敏或饮食限制请务必告知。无法完全排除交叉接触的可能", "如有過敏或飲食限制請務必告知。無法完全排除交叉接觸的可能", "알레르기나 식사 제한은 꼭 알려 주세요. 혼입 가능성을 완전히 없앨 수는 없어요").model_dump(by_alias=True)},
+            {"key": "takeout", "announce": False, "text": L("衛生上、食べ残しのお持ち帰りはできません", "For hygiene reasons, leftovers cannot be taken home", "出于卫生原因，剩菜不能打包带走", "基於衛生考量，剩菜不能打包帶走", "위생상 남은 음식은 포장할 수 없어요").model_dump(by_alias=True)},
+            {"key": "outside_food", "announce": False, "text": L("飲食物の持ち込みはご遠慮ください", "Please do not bring outside food or drinks", "请勿自带食物和饮料", "請勿自帶食物和飲料", "외부 음식・음료 반입은 삼가 주세요").model_dump(by_alias=True)},
+            {"key": "smoking", "announce": False, "text": L("店内は全面禁煙です", "The restaurant is non-smoking", "店内全面禁烟", "店內全面禁菸", "가게 안은 전면 금연이에요").model_dump(by_alias=True)},
+            {"key": "photos", "announce": False, "text": L("料理の写真撮影は自由です。ほかのお客様は写さないでください", "Feel free to photograph your food; please don't photograph other guests", "可以拍摄菜品，请勿拍摄其他客人", "可以拍攝菜品，請勿拍攝其他客人", "음식 사진은 자유롭게 찍으셔도 돼요. 다른 손님은 찍지 말아 주세요").model_dump(by_alias=True)},
+            {"key": "busy", "announce": False, "text": L("混雑時は料理の提供に時間がかかることがあります", "Dishes may take longer when we are busy", "繁忙时上菜可能需要较长时间", "繁忙時上菜可能需要較長時間", "붐빌 때는 음식이 늦게 나올 수 있어요").model_dump(by_alias=True)},
         ],
-        self_service={"water": L("お冷はセルフサービスです。入口横のウォーターサーバーをご利用ください", "Water is self-service — the water server is by the entrance")},
+        self_service={"water": L("お冷はセルフサービスです。入口横のウォーターサーバーをご利用ください", "Water is self-service — the water server is by the entrance", "饮用水为自助，饮水机在入口旁", "飲用水為自助，飲水機在入口旁", "물은 셀프서비스예요. 입구 옆 정수기를 이용해 주세요")},
     )
 
 
@@ -168,6 +195,8 @@ KNOWLEDGE: list[dict] = [
     {"id": "k_sake", "category": "sake", "items": ["d_sake"], "text": L("日本酒は新潟の辛口で、すっきりした味わいです。刺身や焼き魚に合います", "Our sake is a dry one from Niigata — clean and crisp, good with sashimi or grilled fish")},
     {"id": "k_maguro", "category": "season", "items": ["g_maguro"], "text": L("まぐろは毎朝市場で仕入れています", "We buy our tuna at the market every morning")},
     {"id": "k_saba", "category": "season", "items": ["g_saba"], "text": L("さばは秋が旬で、脂がのっています。本日は 5 食限定です", "Mackerel is in season in autumn and rich in flavor — only 5 today")},
+    {"id": "k_autumn", "category": "season", "items": ["g_sanma", "r_kurigohan", "f_kinoko_ten", "s_ginnan"], "text": L("秋の限定メニューは、さんまの塩焼きと栗ご飯です（10〜11 月）。きのこの天ぷらと銀杏も秋の味です", "Our autumn specials are grilled saury and chestnut rice (Oct–Nov). Mushroom tempura and ginkgo nuts are autumn flavors too")},
+    {"id": "k_sanma", "category": "origin", "items": ["g_sanma"], "text": L("さんまは北海道から届いたものを、一尾まるごと焼いています", "Our saury comes from Hokkaido and is grilled whole")},
     {"id": "k_dashimaki", "category": "story", "items": ["s_dashimaki"], "text": L("だし巻き玉子は注文ごとに焼いています", "We make each rolled omelette to order")},
     {"id": "k_yuzu", "category": "origin", "items": ["d_yuzu_sour", "d_yuzu_soda"], "text": L("柚子は高知県産の果汁を使っています", "The yuzu juice comes from Kochi")},
     {"id": "k_matcha", "category": "origin", "items": ["ds_matcha_ice"], "text": L("抹茶は京都・宇治のものです", "The matcha is from Uji, Kyoto")},

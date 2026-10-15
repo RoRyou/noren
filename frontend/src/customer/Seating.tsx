@@ -32,7 +32,7 @@ export function Seating({ onDone }: { onDone: (sid: string, lang: Lang) => void 
     const lines: string[] = [];
     if (store.otoshi_price && store.otoshi_label) {
       const label = store.otoshi_label[lang] || store.otoshi_label.en;
-      lines.push(lang === "ja" ? `お通し（${store.otoshi_label.ja}）：お一人 ${store.otoshi_price} 円` : `${label}: ¥${store.otoshi_price} / person`);
+      lines.push(lang === "ja" ? `お通し（${store.otoshi_label.ja}）：お一人 ${store.otoshi_price} 円` : `${label}: ${t(lang, "perPersonPrice").replace("{p}", String(store.otoshi_price))}`);
     }
     for (const r of store.rules) if (r.announce) lines.push(r.text[lang] || r.text.en || r.text.ja);
     setRules(lines);

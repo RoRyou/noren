@@ -58,6 +58,7 @@ def recommend(
     halal_at_table = any("halal" in g.diets for g in session.guests)
 
     out: list[Recommendation] = []
+    taste_hits: set[str] = set()
     for item in items.values():
         if not item.published or item.sold_out or item.id in session.rejected_recs:
             continue
@@ -83,7 +84,8 @@ def recommend(
         matched = set(taste) & set(item.taste_tags)
         if matched:
             score += 4 * len(matched)
-            reasons.append("taste")
+            reasons.insert(0, "taste")
+            taste_hits.add(item.id)
         if cart_pairs & set(item.pairing_tags) or any(item.id in i.pairing_tags for i in cart_items):
             score += 2
             reasons.append("pairs_with_cart")
@@ -96,6 +98,8 @@ def recommend(
         if any(l.item_id == item.id for l in session.cart):
             score -= 5  # すでにカートにあるものは後ろへ
         out.append(Recommendation(item.id, score, reasons[:2], {gid: v.verdict.mark for gid, v in verdicts.items()}))
+    if taste_hits:  # 好みの味を言われたら、その味の料理だけ（店主のおすすめでも違う味は出さない）
+        out = [r for r in out if r.item_id in taste_hits]
     out.sort(key=lambda r: (-r.score, r.item_id))
     return out[:limit]
 

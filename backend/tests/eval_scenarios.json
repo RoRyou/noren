@@ -1292,6 +1292,20 @@
     ],
     "no_escalation": true
    }
+  },
+  {
+   "id": "C04",
+   "set": "A",
+   "lang": "ja",
+   "party": 2,
+   "declarations": [],
+   "guest": "友人と 2 人。アレルギーを聞かれたら「2 人ともありません」と答える。最初に生ビールを 2 杯頼む（年齢・運転を聞かれたら 2 人とも 20 歳以上で運転しない）。そのあと店員のすすめに乗って、おつまみを 1 つ、季節の料理を 1 つ頼む。最後に確定する。",
+   "taps": {},
+   "expect": {
+    "all_declared": true,
+    "min_items": 3,
+    "no_escalation": true
+   }
   }
  ]
 }

@@ -31,6 +31,28 @@ MAX_CALLS_PER_TURN = 16
 MUTATING = {"add_item", "confirm_alcohol", "update_item", "submit_order", "escalate", "call_staff", "set_dietary_profile", "cancel_order_item"}
 
 
+COURSE = [("drink", ["drink"], "最初のお飲み物"), ("snack", ["snack"], "すぐ出るおつまみ"),
+          ("main", ["fried", "grill", "sashimi"], "メインの料理（揚げ物・焼き物・刺身）"), ("finish", ["rice", "dessert"], "締めのご飯ものかデザート")]
+
+
+# 店舗知識を聞かれたときの言い方 → 知識の分類
+KNOWLEDGE_TOPICS = {
+    "season": ["季節", "旬", "秋", "限定", "おすすめ", "season", "autumn", "fall", "special", "recommend", "当季", "推荐", "제철", "가을"],
+    "origin": ["産地", "どこ", "仕入", "origin", "where", "from", "产地", "산지"],
+    "sake": ["お酒", "日本酒", "地酒", "sake", "alcohol", "清酒", "술"],
+    "story": ["こだわり", "作り方", "手作り", "story", "made", "特色"],
+}
+
+
+def next_course(have: set[str]) -> dict | None:
+    """カートと注文済みの分類から、おすすめの流れの次の段階を返す（全部そろっていれば None）。"""
+    for stage, cats, label in COURSE:
+        if not have & set(cats):
+            return {"stage": stage, "categories": cats, "label": label,
+                    "how": f"「ほかにご注文は？」で終わらせず、recommend（category は {'・'.join(cats)} のどれか）で{label}を出して一言ですすめる"}
+    return None
+
+
 def _brief(card: dict, lang: str) -> dict:
     """AI に返す料理情報（短く）。"""
     label = "ja" if lang == "ja" else "en"
@@ -114,10 +136,13 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
         """店舗知識専門：産地・旬・お酒・店の話など、店主が登録した事実。ないときは found=false（推測しない）。"""
         async def body():
             facts = []
+            t = topic.lower()
+            words = [w for w in t.replace("、", " ").split() if w]
+            cats = {c for c, keys in KNOWLEDGE_TOPICS.items() if any(k in t for k in keys)}  # 「季節のおすすめ」→ season
             for k in await svc.repo.knowledge():
                 text = k["text"]
                 hay = f"{text.ja} {text.en} {' '.join(k.get('items', []))} {k.get('category', '')}".lower()
-                if any(w and w.lower() in hay for w in topic.replace("、", " ").split()):
+                if k.get("category") in cats or any(w in hay for w in words):
                     facts.append(text.get(lang))
             if facts:
                 await emit({"type": "knowledge", "facts": facts[:3]})
@@ -188,6 +213,12 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             out["cart_now"] = cart_text(s.cart, menu)
             if check.ok:  # 「受け付けました」と言ってしまう対策（注文はまだ送っていない）
                 out["note"] = "カートに入れただけで、注文はまだ送っていません。ほかに注文がなければ read_back で復唱します。"
+                orders = await svc.repo.orders_for(session_id)
+                have = {menu[l.item_id].category for l in s.cart if l.item_id in menu}
+                have |= {menu[l.item_id].category for o in orders for l in o.lines if l.item_id in menu}
+                nxt = next_course(have)
+                if nxt:  # おすすめの流れの次（飲み物 → おつまみ → メイン → 締め）
+                    out["next_course"] = nxt
             return out
         return await run("add_item", {"item_id": item_id, "qty": qty, "for_guest": for_guest, "options": options or [],
                                       "table_ok": table_ok}, body)

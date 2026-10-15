@@ -422,3 +422,13 @@ def test_bill_per_guest_skips_guests_who_do_not_eat():
     lines = build_lines([CartLine(line_id="l1", item_id="s_dashimaki", qty=1, not_for=["g1"])], MENU)
     bill = make_bill(s, [Order(id="o1", session_id="s1", lines=lines, idempotency_key="k")])
     assert bill.per_guest == {"g1": 0, "g2": 264, "g3": 264}  # 528 円を g2・g3 で
+
+
+def test_next_course_follows_izakaya_order():
+    from app.agent.tools import next_course
+
+    assert next_course(set())["stage"] == "drink"
+    assert next_course({"drink"})["stage"] == "snack"
+    assert next_course({"drink", "snack"})["stage"] == "main"
+    assert next_course({"drink", "snack", "grill"})["stage"] == "finish"
+    assert next_course({"drink", "snack", "fried", "dessert"}) is None

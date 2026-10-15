@@ -115,6 +115,7 @@ const dict = {
   noteLastOrder: T("まもなくラストオーダーです", "Last orders soon", "即将最后点餐", "即將最後點餐", "곧 마지막 주문이에요"),
   noteUpdated: T("ご注文の状況が更新されました", "Your order was updated", "订单状态已更新", "訂單狀態已更新", "주문 상태가 업데이트되었어요"),
   demoClock: T("デモの時刻 19:00", "Demo time 19:00", "演示时间 19:00", "示範時間 19:00", "데모 시각 19:00"),
+  perPersonPrice: T("お一人 {p} 円", "¥{p} / person", "每位 ¥{p}", "每位 ¥{p}", "1인 ¥{p}"),
   introTitle: T("話しかけてご注文ください", "Just talk to order", "请直接说话点餐", "請直接說話點餐", "말로 주문해 주세요"),
   introBody: T("左のマイクを押して話しかけてください。好みやアレルギーを伺いながら、おすすめをここに表示します。お通し（小鉢）がお一人に一つ付きます。",
     "Tap the mic on the left and talk. We'll ask about your tastes and allergies, and show recommendations here. Each guest gets a small starter (otoshi).",

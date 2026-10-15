@@ -229,7 +229,9 @@ class VoiceSession:
         まれに話さないまま終わるので、NUDGE_AFTER_S 秒たっても声がなければ 1 回だけ結果を伝えるよう促す。"""
         try:
             await asyncio.sleep(NUDGE_AFTER_S)
-            if not self._nudged and self.queue and not self.closed.is_set():
+            # ツールの前にもうしっかり話していたなら、ツールの後に黙っても問題ない（促すと同じことを二度言う）。
+            # 「確認します」程度の短い前置きだけなら促す
+            if not self._nudged and len(self._turn_text) < 40 and self.queue and not self.closed.is_set():
                 self._nudged = True
                 self.metrics["nudges"] += 1
                 log.info("silent after tools; nudging (%s)", self.correlation())

@@ -53,6 +53,13 @@ HINTS = {  # 料理の見た目の補足（量や器）
     "r_ochazuke": "a bowl of rice topped with a piece of grilled salmon and nori, with green tea poured over",
     "r_onigiri": "one grilled triangular rice ball brushed with soy sauce",
     "ds_matcha_ice": "a single plain scoop of matcha green tea ice cream in a small bowl, nothing else",
+    "g_sanma": "one whole salt-grilled Pacific saury on a long plate with grated daikon and a halved sudachi",
+    "g_chanchan": "salmon fillet with cabbage and onion steamed with miso and butter in a small iron pan",
+    "f_kinoko_ten": "maitake and shiitake mushroom tempura on paper with a little salt",
+    "s_satoimo": "small taro potatoes simmered in glossy sweet soy broth in a small bowl",
+    "s_ginnan": "about ten roasted ginkgo nuts with salt on a small plate",
+    "r_kurigohan": "a bowl of rice cooked with chestnuts",
+    "ds_kabocha": "a smooth pumpkin custard pudding in a small glass cup",
 }
 
 
