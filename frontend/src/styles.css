@@ -177,3 +177,24 @@ input[type="text"], input:not([type]) { font: inherit; padding: 10px 12px; borde
 .demo-bar a { color: var(--muted); }
 .intro { padding: 24px; color: var(--muted); line-height: 1.7; }
 .intro h3 { color: var(--ink, #222); margin-bottom: 8px; }
+
+/* 会話が主役のレイアウト（10/15 調整） */
+.mic.big { width: 100%; padding: 18px; font-size: 1.15rem; border-radius: 16px; }
+.input-row input { flex: 1; min-width: 0; }
+.sub-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sub-row .big-toggle { margin: 0; }
+.bubble.hint { opacity: 0.85; }
+.intro { grid-column: 1 / -1; max-width: 640px; }
+.table-screen { width: 100%; max-width: 100vw; overflow-x: hidden; }
+.cart-bar { gap: 10px; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .table-screen { grid-template-rows: auto 1fr; height: auto; min-height: 100vh; }
+  .left { max-height: none; }
+  .log { max-height: 34vh; }
+  .quick { overflow-x: auto; flex-wrap: nowrap; }
+  .quick .chip { flex: 0 0 auto; }
+  .tabs { flex-wrap: wrap; }
+}
+.guest-status .chip.pending { border: 1px dashed var(--muted); }
+.guest-status .chip.on { border: 1px solid var(--indigo); }
+.left { padding-bottom: 28px; }

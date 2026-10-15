@@ -67,6 +67,27 @@ def usage_delta(meta) -> dict[str, int]:
     return {k: v for k, v in counts.items() if v}
 
 
+# このツールを呼んだ返答は、もう画面にカードや注文の欄が出ている
+SHOWS_CARDS = {"recommend", "search_menu", "get_item", "read_back", "submit_order"}
+
+
+def spoken_items(text: str, items: dict, lang: str, limit: int = 4) -> list[str]:
+    """話した文の中に出てきた料理（言った順）。料理名（括弧の前まで）と読みで探す。"""
+    from app.services.table import _kana
+
+    said = _kana(text.lower())
+    hits: list[tuple[int, str]] = []
+    for item in items.values():
+        if not item.published:
+            continue
+        names = {re.split(r"[（(]", n)[0].strip().lower() for n in (item.name.ja, item.name.get(lang)) if n}
+        names |= {w for w in item.search_terms.split() if len(w) >= 3}
+        pos = [said.find(_kana(n)) for n in names if len(n) >= 2 and _kana(n) in said]
+        if pos:
+            hits.append((min(pos), item.id))
+    return [i for _, i in sorted(hits)][:limit]
+
+
 class VoiceSession:
     def __init__(self, svc: TableService, session_id: str, send_json: SendJson, send_audio: SendAudio,
                  idle_close_s: float = IDLE_CLOSE_S, mode: str = "reception"):
@@ -242,6 +263,17 @@ class VoiceSession:
         except asyncio.CancelledError:
             pass
 
+    async def _show_spoken_items(self) -> None:
+        """AI が話の中で料理名を言ったのにカードを出していなければ、その料理のカードを画面に出す（ZI-083）。"""
+        if not self._turn_text or set(self._turn_tool_names) & SHOWS_CARDS:
+            return
+        items = await self.svc.repo.menu()
+        found = spoken_items(self._turn_text, items, self.lang)
+        if not found:
+            return
+        session = await self.svc.repo.session(self.session_id)
+        await self.emit({"type": "show_items", "items": [self.svc.card(items[i], session) for i in found], "source": "speech"})
+
     async def _check_claims(self) -> None:
         """「カートに入れました」と言ったのに、この返答で add_item / update_item がカートを変えていなければ
         （呼んでいない・断られた）、
@@ -354,6 +386,7 @@ class VoiceSession:
                         await self.send_json({"type": "turn_complete"})
                         await self._check_claims()
                         await self._check_mentions()
+                        await self._show_spoken_items()
         except asyncio.CancelledError:
             pass
         except Exception as e:  # 会話は閉じても、画面のタッチ操作は続けられる

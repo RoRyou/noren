@@ -132,12 +132,12 @@ DESCRIPTIONS: dict[str, Localized] = {
 READINGS: dict[str, str] = {
     "d_beer": "なまびーる びーる", "d_highball": "はいぼーる", "d_sake": "にほんしゅ さけ", "d_yuzu_sour": "ゆずさわー",
     "d_oolong": "うーろんちゃ", "d_yuzu_soda": "ゆずそーだ", "s_edamame": "えだまめ", "s_hiyayakko": "ひややっこ",
-    "s_cucumber": "たたききゅうり", "s_dashimaki": "だしまきたまご たまごやき", "f_karaage": "からあげ とりのからあげ",
-    "f_ebi_ten": "えびてん えびのてんぷら てんぷら", "f_fries": "ふらいどぽてと ぽてと", "f_agedashi": "あげだしどうふ",
-    "g_yakitori": "やきとり", "g_saba": "さばのしおやき さば", "g_buta_kimchi": "ぶたきむち きむち", "g_mapo": "まーぼーどうふ まぼどうふ",
-    "g_maguro": "まぐろのさしみ まぐろ さしみ", "r_ochazuke": "さけちゃづけ おちゃづけ ちゃづけ", "r_onigiri": "やきおにぎり おにぎり",
+    "s_cucumber": "たたききゅうり", "s_dashimaki": "だしまきたまご たまごやき だし巻き 出汁巻き", "f_karaage": "からあげ とりのからあげ 唐揚げ",
+    "f_ebi_ten": "えびてん えびのてんぷら 海老天 えび天", "f_fries": "ふらいどぽてと ぽてと", "f_agedashi": "あげだしどうふ",
+    "g_yakitori": "やきとり 焼き鳥", "g_saba": "さばのしおやき さば", "g_buta_kimchi": "ぶたきむち 豚キムチ", "g_mapo": "まーぼーどうふ まぼどうふ 麻婆",
+    "g_maguro": "まぐろのさしみ まぐろ さしみ まぐろ刺身", "r_ochazuke": "さけちゃづけ おちゃづけ ちゃづけ 茶漬け", "r_onigiri": "やきおにぎり おにぎり",
     "ds_matcha_ice": "まっちゃあいす あいす",
-    "g_sanma": "さんまのしおやき さんま", "g_chanchan": "ちゃんちゃんやき さけ しゃけ", "f_kinoko_ten": "きのこのてんぷら きのこ てんぷら",
+    "g_sanma": "さんまのしおやき さんま", "g_chanchan": "ちゃんちゃんやき ちゃんちゃん焼き", "f_kinoko_ten": "きのこのてんぷら きのこ きのこ天",
     "s_satoimo": "さといものにっころがし さといも", "s_ginnan": "ぎんなん", "r_kurigohan": "くりごはん くり",
     "ds_kabocha": "かぼちゃぷりん ぷりん",
 }

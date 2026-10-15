@@ -120,3 +120,16 @@ async def test_silent_reply_without_tools_is_nudged_once(monkeypatch):
     v._watch = asyncio.create_task(v._after_tool_turn())  # 何も話さずに turn_complete が来たとき
     await asyncio.sleep(0.2)
     assert len(v.queue.sent) == 1 and "答えて" in v.queue.sent[0]
+
+
+def test_spoken_items_found_in_order():
+    """AI が言った料理名を、言った順に拾う（カードを出していないとき画面に出すため）。"""
+    from app.agent.live import spoken_items
+    from app.seed.izakaya import build_menu
+
+    m = build_menu()
+    said = "お飲み物に合う、すぐ出るおつまみはいかがですか？枝豆とたたききゅうりが人気ですよ。"
+    assert spoken_items(said, m, "ja") == ["s_edamame", "s_cucumber"]
+    assert spoken_items("How about our Edamame or the Smashed cucumber?", m, "en") == ["s_edamame", "s_cucumber"]
+    assert spoken_items("焼き鳥はいかがですか", m, "ja") == ["g_yakitori"]
+    assert spoken_items("ご注文ありがとうございます", m, "ja") == []

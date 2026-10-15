@@ -368,6 +368,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
           ))}
         </div>
         <div className="log" ref={logRef}>
+          {turns.length === 0 && <div className="bubble ai hint">{t(lang, "greetBubble")}</div>}
           {turns.map((tn, i) => (
             <div key={i} className={`bubble ${tn.role}`}>
               {tn.text}
@@ -382,12 +383,13 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
           <button className="chip" onClick={async () => setSheet({ kind: "bill", data: await api.bill(sid) })}>{t(lang, "quickBill")}</button>
         </div>
         {!hasVoice(lang) && <div className="note small">{t(lang, "textOnly")}</div>}
+        {/* 会話が主役：大きなマイク → 文字の入力 → よく使う言葉 → 緊急・文字の大きさ */}
+        {hasVoice(lang) && (
+          <button className={`mic big ${voice}`} onClick={tapMic}>
+            🎤 {voice === "closed" || voice === "unavailable" ? t(lang, "talk") : t(lang, voice === "speaking" ? "speaking" : voice === "connecting" ? "connecting" : "listening")}
+          </button>
+        )}
         <div className="input-row">
-          {hasVoice(lang) && (
-            <button className={`mic ${voice}`} onClick={tapMic}>
-              {voice === "closed" || voice === "unavailable" ? t(lang, "talk") : t(lang, voice === "speaking" ? "speaking" : voice === "connecting" ? "connecting" : "listening")}
-            </button>
-          )}
           <input value={text} placeholder={t(lang, "typeHere")} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendText(text)} />
           <button onClick={() => sendText(text)}>{t(lang, "send")}</button>
         </div>
@@ -396,12 +398,14 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
             {t(lang, "interpret")}
           </button>
         )}
-        <button className="emergency" onClick={async () => { await api.emergency(sid); setBanner(t(lang, "emergencySent")); }}>
-          {t(lang, "emergency")}
-        </button>
-        <button className={bigText ? "big-toggle on" : "big-toggle"} aria-pressed={bigText} onClick={toggleBigText}>
-          {t(lang, "bigText")}
-        </button>
+        <div className="sub-row">
+          <button className="emergency" onClick={async () => { await api.emergency(sid); setBanner(t(lang, "emergencySent")); }}>
+            {t(lang, "emergency")}
+          </button>
+          <button className={bigText ? "big-toggle on" : "big-toggle"} aria-pressed={bigText} onClick={toggleBigText}>
+            {t(lang, "bigText")}
+          </button>
+        </div>
       </section>
 
       <section className="right">
