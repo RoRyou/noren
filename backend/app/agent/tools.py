@@ -79,8 +79,9 @@ def _brief(card: dict, lang: str) -> dict:
 
 
 def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, correlation: Callable[[], str],
-                heard: Callable[[], int] = lambda: 0) -> list:
-    """heard：お客様の発話・画面操作を受け取った回数。復唱の後にお客様の返事があったかを見るのに使う。"""
+                heard: Callable[[], int] = lambda: 0, ai_said: Callable[[], str] = lambda: "") -> list:
+    """heard：お客様の発話・画面操作を受け取った回数。復唱の後にお客様の返事があったかを見るのに使う。
+    ai_said：この返答で AI がここまでに話した文字。質問した直後に先へ進まないように使う。"""
     recent: dict[str, tuple[float, dict]] = {}
     read_back_at: list[int] = []  # 復唱したときの heard()
     calls: list[int] = []  # [この返答で呼んだ回数, そのときの heard()]
@@ -270,6 +271,9 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
     async def read_back() -> dict:
         """注文：送信前の復唱。カートを再チェックし、確認用の confirm_token を返す。画面に確認シートが出る。"""
         async def body():
+            if "？" in ai_said() or "?" in ai_said():  # この返答で質問したばかり（「デザートは？」→ 答えを待たずに復唱）
+                return {"ok": False, "reason": "wait_for_answer",
+                        "say": "いまお客様に質問したので、答えを待ってから read_back を呼ぶ。ここでは何も言わずに待つ。"}
             prev = (await svc.repo.session(session_id)).confirm_token
             rb = await svc.read_back(session_id)
             if not (prev and rb.get("confirm_token") == prev):

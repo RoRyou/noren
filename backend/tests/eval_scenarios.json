@@ -1306,6 +1306,23 @@
     "min_items": 3,
     "no_escalation": true
    }
+  },
+  {
+   "id": "C05",
+   "set": "A",
+   "lang": "ja",
+   "party": 1,
+   "declarations": [],
+   "guest": "一人客。アレルギーはなし。最初に烏龍茶と枝豆と唐揚げを頼む。そのあと店員のすすめを聞き、自分からは確定しない。ご飯ものをすすめられたら「ご飯いらないです」とだけ答える。デザートをすすめられたら「抹茶アイスをください」と答える。デザートを頼んだあとで初めて「以上です。確定してください」と言う。",
+   "taps": {},
+   "expect": {
+    "all_declared": true,
+    "ordered_includes": [
+     "ds_matcha_ice",
+     "f_karaage"
+    ],
+    "no_escalation": true
+   }
   }
  ]
 }

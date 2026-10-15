@@ -50,6 +50,7 @@ def recommend(
     category: str | None = None,
     for_guest: str | None = None,
     limit: int = 3,
+    ordered: set[str] | None = None,
 ) -> list[Recommendation]:
     taste = taste or []
     cart_items = [items[l.item_id] for l in session.cart if l.item_id in items]
@@ -62,6 +63,8 @@ def recommend(
     for item in items.values():
         if not item.published or item.sold_out or item.id in session.rejected_recs:
             continue
+        if item.id in (ordered or set()) or any(l.item_id == item.id for l in session.cart):
+            continue  # カートや注文済みの料理はすすめ直さない
         if category and item.category != category:
             continue
         if item.is_alcohol and halal_at_table:
@@ -95,8 +98,8 @@ def recommend(
         if phase == Phase.eating and item.category in SHIME:
             score += 1.5
             reasons.append("shime")
-        if any(l.item_id == item.id for l in session.cart):
-            score -= 5  # すでにカートにあるものは後ろへ
+        if item.id in session.recommended:
+            score -= 4  # 一度すすめたものは後ろへ（同じ料理を何度もすすめない）
         out.append(Recommendation(item.id, score, reasons[:2], {gid: v.verdict.mark for gid, v in verdicts.items()}))
     if taste_hits:  # 好みの味を言われたら、その味の料理だけ（店主のおすすめでも違う味は出さない）
         out = [r for r in out if r.item_id in taste_hits]

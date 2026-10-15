@@ -433,3 +433,22 @@ async def test_order_before_declaration_is_added_after(env):
     r2 = await tools["set_dietary_profile"]("g2", [], [])
     assert [p["decision"] for p in r2["pending_orders"]] == ["ok"]
     assert [l.item_id for l in (await repo.session(s.id)).cart] == ["s_edamame"]
+
+
+async def test_read_back_waits_after_asking_a_question(env):
+    """AI が「デザートはいかがですか？」と聞いた同じ返答の中では、復唱に進めない（ZI-086）。"""
+    from app.agent.tools import build_tools
+
+    svc, repo, *_ = env
+    s = await svc.seat("14", 1, "ja")
+    await svc.declare(s.id, [{"guest_id": "g1"}])
+    said = ["デザートはいかがいたしますか？かぼちゃプリンなどがございます。"]
+
+    async def emit(_):
+        pass
+
+    tools = {t.__name__: t for t in build_tools(svc, s.id, "ja", emit, lambda: "t", lambda: 1, lambda: said[0])}
+    await tools["add_item"]("s_edamame", 1)
+    assert (await tools["read_back"]())["reason"] == "wait_for_answer"
+    said[0] = "かしこまりました。"  # お客様が答えた後の返答
+    assert "confirm_token" in await tools["read_back"]()

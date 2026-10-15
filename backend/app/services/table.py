@@ -314,7 +314,8 @@ class TableService:
         items = await self.repo.menu()
         orders = await self.repo.orders_for(session_id)
         phase = derive_phase(session, orders, store, self.clock())
-        recs = recommend(items, session, phase, taste, category, for_guest, limit)
+        ordered = {l.item_id for o in orders for l in o.lines}
+        recs = recommend(items, session, phase, taste, category, for_guest, limit, ordered)
         if recs:
             await self.repo.update_session(session_id, {"recommended": firestore.ArrayUnion([r.item_id for r in recs])})
         return [{**self.card(items[r.item_id], session), "reasons": r.to_dict(items, session.lang)["reasons"]} for r in recs]

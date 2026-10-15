@@ -117,6 +117,7 @@ class VoiceSession:
         self._mentions: tuple[set[str], set[str]] = (set(), set())  # 直前のお客様の発話で拾ったアレルギー・食事制限
         # 1 回の返答で話した文字と呼んだツール（「入れました」と言ったのに add_item を呼んでいない対策）
         self._turn_text = ""
+        self._ai_partial = ""  # まだ確定していない AI の文字（話している途中）
         self._turn_tool_names: list[str] = []
         self._turn_added_ok = False  # この返答で add_item / update_item が実際にカートを変えたか
         self._screen_turn = False
@@ -154,7 +155,8 @@ class VoiceSession:
                 name="reception",
                 model=Gemini(model=settings.live_model, client_kwargs=_vertex_kwargs()),
                 instruction=instruction,
-                tools=build_tools(self.svc, self.session_id, self.lang, self.emit, self.correlation, lambda: self.heard),
+                tools=build_tools(self.svc, self.session_id, self.lang, self.emit, self.correlation, lambda: self.heard,
+                                  lambda: self._turn_text + self._ai_partial),
                 generate_content_config=(
                     types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_budget=settings.live_thinking_budget))
                     if settings.live_thinking_budget is not None else None),
@@ -344,9 +346,10 @@ class VoiceSession:
                 if ev.output_transcription and ev.output_transcription.text:
                     if ev.partial:  # 途中の文字は差分で届くので、ここでつなげてから送る
                         ai_partial += ev.output_transcription.text
+                        self._ai_partial = ai_partial
                         await self.send_json({"type": "transcript", "role": "ai", "text": ai_partial, "final": False})
                     else:
-                        ai_partial = ""
+                        ai_partial = self._ai_partial = ""
                         self._turn_text += ev.output_transcription.text
                         await self.send_json({"type": "transcript", "role": "ai", "text": ev.output_transcription.text,
                                               "final": True})
@@ -377,6 +380,7 @@ class VoiceSession:
                     self.metrics["turns"] += 1
                     if ai_partial:  # 確定の文字起こしが来ないまま区切られた → 途中までの文字を確定として送る
                         self._turn_text += ai_partial
+                        self._ai_partial = ""
                         await self.send_json({"type": "transcript", "role": "ai", "text": ai_partial, "final": True})
                         await self.svc.repo.append_turn(self.session_id, "ai", ai_partial)
                         ai_partial = ""
