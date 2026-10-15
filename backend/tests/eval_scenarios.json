@@ -1270,6 +1270,28 @@
     "min_items": 1,
     "no_escalation": true
    }
+  },
+  {
+   "id": "C03",
+   "set": "A",
+   "lang": "ja",
+   "party": 2,
+   "declarations": [],
+   "guest": "友人と 2 人。最初に聞かれたら「友人（ゲスト 2）は卵アレルギー、私はなし」と答える。「鶏の料理は何がありますか？」と聞き、ほかにもあるか聞く。焼き鳥を 1 つ、自分（ゲスト 1）用に頼んで確定する。",
+   "taps": {
+    "guest_for": "g1"
+   },
+   "expect": {
+    "all_declared": true,
+    "mentions": [
+     "唐揚げ",
+     "焼き鳥"
+    ],
+    "ordered_includes": [
+     "g_yakitori"
+    ],
+    "no_escalation": true
+   }
   }
  ]
 }

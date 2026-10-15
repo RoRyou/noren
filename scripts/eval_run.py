@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import statistics
 import sys
 import time
@@ -129,7 +130,9 @@ class Run:
         return {"text": text, "events": events, "tools": tools}
 
     async def tap(self, events: list[dict]) -> list[str]:
-        """画面で押す操作（台本どおり）。押したら説明を返す。"""
+        """画面で押す操作（台本どおり）。押したら説明を返す。NOREN_EVAL_NO_TAPS=1 なら押さない（会話だけで進める）。"""
+        if os.environ.get("NOREN_EVAL_NO_TAPS"):
+            return []
         taps = self.s.get("taps", {})
         done = []
         for ev in events:

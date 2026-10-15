@@ -175,3 +175,5 @@ input[type="text"], input:not([type]) { font: inherit; padding: 10px 12px; borde
 .demo-single iframe { flex: 1; width: 100%; border: none; }
 .demo-bar { display: flex; gap: 14px; align-items: center; justify-content: flex-end; padding: 6px 14px; border-top: 1px solid var(--line); font-size: 0.85rem; background: var(--bg, #fff); }
 .demo-bar a { color: var(--muted); }
+.intro { padding: 24px; color: var(--muted); line-height: 1.7; }
+.intro h3 { color: var(--ink, #222); margin-bottom: 8px; }

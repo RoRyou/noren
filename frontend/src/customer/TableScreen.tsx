@@ -71,7 +71,6 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
   useEffect(() => {
     void refresh();
     void api.menu(sid).then(setMenu);
-    void api.recommend(sid).then(setRecs);
     const proto = location.protocol === "https:" ? "wss" : "ws";
     let alive = true;
     let retry = 0;
@@ -177,21 +176,19 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
       case "cart":
         setCart(m.cart);
         break;
+      // AI の会話から来た確認（どなたの分・お酒・断り・復唱）は、押す画面を出さずに AI が会話で聞く（ZI-079）
       case "ask_guest":
-        if (m.item_id) {
-          if (m.options && Object.keys(m.options).length > 0) chosenOptions.current[m.item_id] = m.options;
-          setSheet({ kind: "guest", item_id: m.item_id, qty: m.qty ?? 1, verdicts: m.verdicts, multi: (m.qty ?? 1) > 1 && cards[m.item_id]?.is_alcohol });
-        }
-        break;
       case "ask_alcohol":
-        if (m.options && Object.keys(m.options).length > 0) chosenOptions.current[m.item_id] = m.options;
-        setSheet({ kind: "alcohol", item_id: m.item_id, qty: m.qty ?? 1, for_guest: m.for_guest });
+        if (m.item_id && m.options && Object.keys(m.options).length > 0) chosenOptions.current[m.item_id] = m.options;
         break;
       case "blocked":
-        setSheet({ kind: "blocked", item_id: m.item_id, check: m.check, alternatives: m.alternatives ?? [] });
+        if (m.alternatives?.length) {
+          setSpot(m.alternatives); // 代わりの料理はおすすめの欄に並べるだけ
+          setTab("recommend");
+        }
         break;
       case "read_back":
-        if (m.confirm_token) setSheet({ kind: "readback", data: m });
+        setTab("order"); // 復唱の内容は注文の欄で見られる。確定は会話で
         break;
       case "order_result":
         if (m.ok) {
@@ -208,8 +205,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
         setBanner(m.urgent ? t(lang, "emergencySent") : t(lang, "staffNotified"));
         break;
       case "confirm_declaration":
-        setSheet({ kind: "declaration", allergies: m.allergies, diets: m.diets });
-        break;
+        break; // 記録漏れは AI に知らせて会話で確かめる（サーバー側）
       case "guests_updated":
         setGuests(m.guests);
         void api.menu(sid).then(setMenu);
@@ -426,6 +422,12 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
         {offline && <div className="banner warn">{t(lang, "reconnecting")}</div>}
         {banner && <div className="banner" onClick={() => setBanner("")}>{banner}</div>}
         <div className="cards">
+          {tab === "recommend" && spot.length === 0 && recs.length === 0 && (
+            <div className="intro">
+              <h3>{t(lang, "introTitle")}</h3>
+              <p>{t(lang, "introBody")}</p>
+            </div>
+          )}
           {tab === "recommend" && [...spot, ...recs.filter((r) => !spot.some((s) => s.item_id === r.item_id))].map((c) => (
             <ItemCard key={c.item_id} c={c} lang={lang} guests={guests} onAdd={() => startAdd(c.item_id)} />
           ))}
