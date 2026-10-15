@@ -20,6 +20,7 @@ SA="${SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
 SECRET_FILE="${CLOUDSDK_CONFIG}/noren_demo_secret"  # デモ店の cookie の署名鍵（デプロイし直しても変えない）
 
 g() { gcloud --project "$PROJECT" --quiet "$@"; }
+retry() { for i in 1 2 3 4 5 6; do "$@" && return 0; sleep 10; done; return 1; }  # 作った直後の反映待ち
 step() { printf '\n== %s\n' "$*"; }
 
 ACCOUNT="$(gcloud config get-value account 2>/dev/null || true)"
@@ -41,10 +42,10 @@ step "サービスアカウントと権限"
 g iam service-accounts describe "$SA" >/dev/null 2>&1 \
   || g iam service-accounts create "$SA_NAME" --display-name="NOREN Cloud Run"
 for role in roles/datastore.user roles/aiplatform.user roles/cloudtasks.enqueuer roles/logging.logWriter; do
-  g projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" --role="$role" --condition=None >/dev/null
+  retry g projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" --role="$role" --condition=None >/dev/null
 done
 # Cloud Tasks・Cloud Scheduler が、このサービスアカウントの OIDC トークンを付けて呼べるように
-g iam service-accounts add-iam-policy-binding "$SA" --member="serviceAccount:$SA" \
+retry g iam service-accounts add-iam-policy-binding "$SA" --member="serviceAccount:$SA" \
   --role=roles/iam.serviceAccountUser >/dev/null
 # ソースからのビルド（Cloud Build）は Compute Engine の既定のサービスアカウントで動く
 NUMBER="$(g projects describe "$PROJECT" --format='value(projectNumber)')"
