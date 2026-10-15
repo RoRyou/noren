@@ -22,9 +22,17 @@ from app.realtime.scheduler import Handler
 
 class CloudTasksScheduler:
     def __init__(self, client: tasks_v2.CloudTasksAsyncClient | None = None):
-        self.client = client or tasks_v2.CloudTasksAsyncClient()
+        # 非同期のクライアントは、使うイベントループの中で作る（import 時に作ると別のループに結び付いて失敗する）
+        self._client = client
         self.handlers: dict[str, Handler] = {}
-        self.queue = self.client.queue_path(settings.google_cloud_project, settings.tasks_location, settings.tasks_queue)
+        self.queue = tasks_v2.CloudTasksAsyncClient.queue_path(settings.google_cloud_project, settings.tasks_location,
+                                                               settings.tasks_queue)
+
+    @property
+    def client(self) -> tasks_v2.CloudTasksAsyncClient:
+        if self._client is None:
+            self._client = tasks_v2.CloudTasksAsyncClient()
+        return self._client
 
     def register(self, name: str, handler: Handler) -> None:
         self.handlers[name] = handler
