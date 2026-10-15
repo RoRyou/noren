@@ -430,5 +430,6 @@ def test_next_course_follows_izakaya_order():
     assert next_course(set())["stage"] == "drink"
     assert next_course({"drink"})["stage"] == "snack"
     assert next_course({"drink", "snack"})["stage"] == "main"
-    assert next_course({"drink", "snack", "grill"})["stage"] == "finish"
-    assert next_course({"drink", "snack", "fried", "dessert"}) is None
+    assert next_course({"drink", "snack", "grill"})["stage"] == "shime"
+    assert next_course({"drink", "snack", "grill", "rice"})["stage"] == "dessert"  # 締めの後にデザート
+    assert next_course({"drink", "snack", "fried", "rice", "dessert"})["stage"] == "confirm"  # 一通りそろったら確定へ

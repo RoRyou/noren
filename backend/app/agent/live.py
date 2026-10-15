@@ -67,8 +67,8 @@ def usage_delta(meta) -> dict[str, int]:
     return {k: v for k, v in counts.items() if v}
 
 
-# このツールを呼んだ返答は、もう画面にカードや注文の欄が出ている
-SHOWS_CARDS = {"recommend", "search_menu", "get_item", "read_back", "submit_order"}
+# このツールを呼んだ返答は、もう画面にカードや注文の欄が出ている（add_item は次の段階のおすすめを出す）
+SHOWS_CARDS = {"recommend", "search_menu", "get_item", "read_back", "submit_order", "add_item"}
 
 
 def spoken_items(text: str, items: dict, lang: str, limit: int = 4) -> list[str]:
@@ -268,10 +268,13 @@ class VoiceSession:
         if not self._turn_text or set(self._turn_tool_names) & SHOWS_CARDS:
             return
         items = await self.svc.repo.menu()
-        found = spoken_items(self._turn_text, items, self.lang)
+        session = await self.svc.repo.session(self.session_id)
+        orders = await self.svc.repo.orders_for(self.session_id)
+        # カートや注文済みの料理は「入れました」の確認で言っただけ。すすめた料理だけを出す
+        taken = {l.item_id for l in session.cart} | {l.item_id for o in orders for l in o.lines}
+        found = [i for i in spoken_items(self._turn_text, items, self.lang, limit=8) if i not in taken][:4]
         if not found:
             return
-        session = await self.svc.repo.session(self.session_id)
         await self.emit({"type": "show_items", "items": [self.svc.card(items[i], session) for i in found], "source": "speech"})
 
     async def _check_claims(self) -> None:

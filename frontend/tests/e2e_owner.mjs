@@ -28,8 +28,8 @@ try {
   check("写真から書き写し（下書き）", /\d+ 品/.test(banner), banner);
   await page.screenshot({ path: path.join(OUT, "01_drafts.png") });
 
-  await page.locator(".owner-row", { hasText: "濃厚豚骨らーめん" }).click();
-  await page.getByText("AI に質問を作ってもらう").click();
+  // 確認待ちの表：行の「AIに質問」で食材の質問を作って開く
+  await page.locator("tr", { hasText: "濃厚豚骨らーめん" }).getByText("AIに質問").click();
   await page.waitForSelector(".owner-detail ul li", { timeout: 60000 });
   check("AI の質問が出る（食材は決めない）", (await page.locator(".owner-detail ul li").count()) > 0);
   await page.locator(".owner-detail input[placeholder^='ほかの食材']").fill("中華麺、豚骨、醤油、ねぎ、豚肉");

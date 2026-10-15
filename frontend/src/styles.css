@@ -198,3 +198,6 @@ input[type="text"], input:not([type]) { font: inherit; padding: 10px 12px; borde
 .guest-status .chip.pending { border: 1px dashed var(--muted); }
 .guest-status .chip.on { border: 1px solid var(--indigo); }
 .left { padding-bottom: 28px; }
+.quick.small-links .chip { font-size: 0.8rem; padding: 4px 10px; color: var(--muted); }
+.allergen-line { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+.allergen-line.cross { color: #9a6a00; }

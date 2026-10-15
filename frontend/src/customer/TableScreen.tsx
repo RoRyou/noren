@@ -376,9 +376,7 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
           ))}
           {facts.length > 0 && <div className="facts">{facts.join(" / ")}</div>}
         </div>
-        <div className="quick">
-          <button className="chip" onClick={() => sendText(t(lang, "quickRecommend"))}>{t(lang, "quickRecommend")}</button>
-          <button className="chip" onClick={() => sendText(t(lang, "quickAllergy"))}>{t(lang, "quickAllergy")}</button>
+        <div className="quick small-links">{/* 話せないとき（騒がしい・急いでいる）用。おすすめやアレルギーは AI から聞く */}
           <button className="chip" onClick={() => setTab("menu")}>{t(lang, "quickOrder")}</button>
           <button className="chip" onClick={async () => setSheet({ kind: "bill", data: await api.bill(sid) })}>{t(lang, "quickBill")}</button>
         </div>
@@ -675,6 +673,14 @@ function ItemCard({ c, lang, guests, onAdd }: { c: Card; lang: Lang; guests: Gue
         <div className="price">¥{c.price.toLocaleString()}</div>
         {c.reasons && c.reasons.length > 0 && <div className="reasons">{c.reasons.map((r) => <span key={r}>{r}</span>)}</div>}
         {c.portion && <div className="small">{c.portion}</div>}
+        {/* アレルゲン（店主の答えた食材からの換算）と混入の可能性 */}
+        <div className="allergen-line">
+          {t(lang, "allergensLabel")}：{c.allergens.length ? c.allergens.map((a: string) => allergenName(lang, a)).join("・") : t(lang, "none")}
+          {c.allergen_status !== "confirmed" && <span className="tag unconfirmed">{t(lang, "unconfirmedShort")}</span>}
+        </div>
+        {c.cross_contact.length > 0 && (
+          <div className="allergen-line cross">{t(lang, "crossLabel")}：{c.cross_contact.map((a: string) => allergenName(lang, a)).join("・")}</div>
+        )}
         <div className="marks">
           {guests.map((g) => (
             <span key={g.id} className={`mark m${c.marks[g.id]?.mark}`} title={c.marks[g.id]?.reasons.join("、")}>

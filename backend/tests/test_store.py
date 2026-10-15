@@ -414,3 +414,22 @@ async def test_table_ok_is_remembered(env):
     check, _ = await svc.add_to_cart(s.id, "f_karaage", 1)  # もう 1 つ頼んでも聞かない
     assert check.ok
     assert (await repo.session(s.id)).table_oks == {"f_karaage": ["g1"]}
+
+
+async def test_order_before_declaration_is_added_after(env):
+    """申告の前に頼まれた料理は、申告が終わったら自動でカートに入る（ZI-084）。"""
+    from app.agent.tools import build_tools
+
+    svc, repo, *_ = env
+    s = await svc.seat("13", 2, "ja")
+
+    async def emit(_):
+        pass
+
+    tools = {t.__name__: t for t in build_tools(svc, s.id, "ja", emit, lambda: "t")}
+    assert (await tools["add_item"]("s_edamame", 1))["decision"] == "need_declaration"
+    r1 = await tools["set_dietary_profile"]("g1", [], [])
+    assert "pending_orders" not in r1  # まだ g2 が未確認
+    r2 = await tools["set_dietary_profile"]("g2", [], [])
+    assert [p["decision"] for p in r2["pending_orders"]] == ["ok"]
+    assert [l.item_id for l in (await repo.session(s.id)).cart] == ["s_edamame"]

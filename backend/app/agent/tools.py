@@ -32,7 +32,8 @@ MUTATING = {"add_item", "confirm_alcohol", "update_item", "submit_order", "escal
 
 
 COURSE = [("drink", ["drink"], "最初のお飲み物"), ("snack", ["snack"], "すぐ出るおつまみ"),
-          ("main", ["fried", "grill", "sashimi"], "メインの料理（揚げ物・焼き物・刺身）"), ("finish", ["rice", "dessert"], "締めのご飯ものかデザート")]
+          ("main", ["fried", "grill", "sashimi"], "メインの料理（揚げ物・焼き物・刺身）"), ("shime", ["rice"], "締めのご飯もの"),
+          ("dessert", ["dessert"], "デザート")]
 
 
 # 店舗知識を聞かれたときの言い方 → 知識の分類
@@ -50,7 +51,9 @@ def next_course(have: set[str]) -> dict | None:
         if not have & set(cats):
             return {"stage": stage, "categories": cats, "label": label,
                     "how": f"「ほかにご注文は？」で終わらせず、recommend（category は {'・'.join(cats)} のどれか）で{label}を出して一言ですすめる"}
-    return None
+    # 一通りそろった：確定へ案内する
+    return {"stage": "confirm", "categories": [], "label": "ご注文の確定",
+            "how": "「ほかにご注文は？」ではなく「ご注文はこれでおそろいですか？確認しましょうか」と確定へ案内し、はいなら read_back で復唱する"}
 
 
 def _brief(card: dict, lang: str) -> dict:
@@ -81,6 +84,7 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
     recent: dict[str, tuple[float, dict]] = {}
     read_back_at: list[int] = []  # 復唱したときの heard()
     calls: list[int] = []  # [この返答で呼んだ回数, そのときの heard()]
+    pending_adds: list[dict] = []  # 申告の前に頼まれた料理（申告が終わったら自動で入れる。ZI-084）
 
     async def run(name: str, args: dict, body: Callable[[], Awaitable[dict]]) -> dict:
         key = name + json.dumps(args, sort_keys=True, ensure_ascii=False)
@@ -172,7 +176,20 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
                     "diets": sorted(set(g.diets) | set(diets)), "severe": severe or g.severe}
             s = await svc.declare(session_id, [decl])
             await emit({"type": "guests_updated", "guests": [x.model_dump() for x in s.guests]})
-            return {"ok": True, "guest": s.guest(guest_id).model_dump(), "escalated": severe}
+            out = {"ok": True, "guest": s.guest(guest_id).model_dump(), "escalated": severe}
+            if pending_adds and all(g.declared for g in s.guests):  # 申告の前に頼まれた料理を入れる
+                menu = await svc.repo.menu()
+                added = []
+                for p in list(pending_adds):
+                    check, s = await svc.add_to_cart(session_id, p["item_id"], p["qty"], p["for_guest"], p["options"],
+                                                     actor="reception_agent", correlation_id=correlation())
+                    name = menu[p["item_id"]].name.ja if p["item_id"] in menu else p["item_id"]
+                    added.append({"item": name, "qty": p["qty"], **check.to_dict()})
+                pending_adds.clear()
+                await emit({"type": "cart", "cart": [l.model_dump() for l in s.cart]})
+                out["pending_orders"] = added
+                out["note"] = "申告の前に頼まれた料理を処理した。decision が ok ならカートに入れたと伝え、need_* ならその確認をする"
+            return out
         return await run("set_dietary_profile", {"guest_id": guest_id, "allergies": allergies, "diets": diets, "severe": severe}, body)
 
     async def confirm_alcohol(guest_id: str, adult: bool, driving: bool) -> dict:
@@ -196,6 +213,9 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             check, s = await svc.add_to_cart(session_id, item_id, qty, for_guest or None, opts or None,
                                              actor="reception_agent", correlation_id=correlation(), table_ok=table_ok)
             out = check.to_dict()
+            if check.decision == Decision.need_declaration:
+                pending_adds.append({"item_id": item_id, "qty": qty, "for_guest": for_guest or None, "options": opts or None})
+                out["note"] = "まだ食べられないものを聞いていない方がいる。聞いて set_dietary_profile で記録すると、この注文は自動でカートに入る"
             cannot = [w.split(":", 1)[1] for w in check.warnings if w.startswith("not_for:")]
             if cannot:  # 召し上がらない方と理由（「ゲスト 2：卵を含みます」）
                 out["not_for"] = {gid: out["verdicts"].get(gid, {}).get("reasons") or ["お酒を飲めない方"] for gid in cannot}
@@ -217,7 +237,15 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
                 have = {menu[l.item_id].category for l in s.cart if l.item_id in menu}
                 have |= {menu[l.item_id].category for o in orders for l in o.lines if l.item_id in menu}
                 nxt = next_course(have)
-                if nxt:  # おすすめの流れの次（飲み物 → おつまみ → メイン → 締め）
+                if nxt:  # おすすめの流れの次（飲み物 → おつまみ → メイン → 締め）。カードは AI を待たずに出す
+                    recs: list[dict] = []
+                    for cat in nxt["categories"]:
+                        recs += await svc.recommend(session_id, None, cat, None, 2)
+                    recs = sorted(recs, key=lambda r: -len(r.get("reasons", [])))[:4]
+                    if recs:
+                        await emit({"type": "recommendations", "items": recs})
+                        nxt["items"] = [{"item_id": r["item_id"], "name": r["name"], "why": r["reasons"]} for r in recs]
+                        nxt["how"] = f"画面に{nxt['label']}のカードを出した。この中から一つ二つ、名前と一言の理由ですすめる"
                     out["next_course"] = nxt
             return out
         return await run("add_item", {"item_id": item_id, "qty": qty, "for_guest": for_guest, "options": options or [],

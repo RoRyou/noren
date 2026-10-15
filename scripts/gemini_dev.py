@@ -102,6 +102,34 @@ def apply(edits: list[Edit]) -> None:
             f.write_text(f.read_text().replace(e.search, e.replace, 1))
 
 
+class WholeFile(BaseModel):
+    path: str
+    content: str = Field(description="ファイルの全文（変えない部分もそのまま含める）")
+
+
+class Rewrite(BaseModel):
+    files: list[WholeFile]
+    summary_ja: str
+
+
+async def propose_rewrite(task: str, files: list[str], context: list[str], model: str) -> Proposal:
+    """ファイル全体を書き直させ、差分の確認と当て方は同じ形（search=今の全文）にそろえる。大きな作り直し向け。"""
+    client = genai.Client(vertexai=True, project=settings.google_cloud_project, location=settings.text_location)
+    contents = (f"# やること\n{task}\n\n# 書き直すファイル（全文を返す）\n{_read(files)}\n\n"
+                + (f"# 参考（変えない）\n{_read(context)}\n" if context else ""))
+    rules = RULES.replace("答えは edits の配列", "答えは files の配列（path と全文 content）。edits の説明は無視").strip()
+    r = await asyncio.wait_for(client.aio.models.generate_content(
+        model=model, contents=contents,
+        config=types.GenerateContentConfig(system_instruction=rules, response_mime_type="application/json",
+                                           response_schema=Rewrite, temperature=0.2)), 600)
+    rw = Rewrite.model_validate_json(r.text)
+    edits = []
+    for f in rw.files:
+        cur = _resolve(f.path)
+        edits.append(Edit(path=f.path, search=cur.read_text() if cur.exists() else "", replace=f.content))
+    return Proposal(edits=edits, summary_ja=rw.summary_ja)
+
+
 async def propose(task: str, files: list[str], context: list[str], model: str) -> Proposal:
     client = genai.Client(vertexai=True, project=settings.google_cloud_project, location=settings.text_location)
     contents = (f"# やること\n{task}\n\n# 変えてよいファイル\n{_read(files)}\n\n"
@@ -121,6 +149,7 @@ async def main() -> int:
     ap.add_argument("--context", nargs="*", default=[])
     ap.add_argument("--model", default=settings.text_model)
     ap.add_argument("--apply", help="確認済みの edits.json を当てる")
+    ap.add_argument("--rewrite", action="store_true", help="ファイル全体を書き直させる（大きな作り直し）")
     args = ap.parse_args()
 
     if args.apply:
@@ -134,7 +163,7 @@ async def main() -> int:
         return 0
 
     task = args.task or Path(args.task_file).read_text()
-    proposal = await propose(task, args.files, args.context, args.model)
+    proposal = await (propose_rewrite if args.rewrite else propose)(task, args.files, args.context, args.model)
     out = REPO_ROOT / "logs" / "gemini_dev" / datetime.now().strftime("%Y%m%d-%H%M%S")
     out.mkdir(parents=True, exist_ok=True)
     (out / "edits.json").write_text(proposal.model_dump_json(indent=2))
