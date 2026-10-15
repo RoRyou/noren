@@ -26,16 +26,16 @@ svg{position:absolute;left:0;top:0;width:1500px;height:880px;pointer-events:none
 <div class="box" id="staff" style="left:40px;top:430px;width:220px"><b>店員の端末</b>料理ごとの注文ボード<br>引き継ぎ（理由と要約つき）<br>「出汁が切れた」と一言</div>
 <div class="box" id="owner" style="left:40px;top:640px;width:220px"><b>店主の画面</b>メニュー写真の取り込み<br>AI に任せる範囲（ポリシー）</div>
 
-<div class="box ai" id="reception" style="left:345px;top:110px;width:330px"><b>接客エージェント（音声）</b>雑談しながらおすすめ → 注文まで<br>タップで開始・話さなければ 20 秒で終了<br>専門機能を並列に呼び、答えをまとめる
+<div class="box ai" id="reception" style="left:345px;top:110px;width:330px"><b>接客エージェント（音声）</b>食べられないものを会話で確認 → 飲み物から順におすすめ → 注文まで<br>タップで開始・話さなければ 20 秒で終了<br>専門機能を並列に呼び、答えをまとめる
 <div><span class="tool">メニュー</span><span class="tool">おすすめ</span><span class="tool">店舗知識</span><span class="tool">注文・会計</span><span class="tool">店員へ引き継ぎ</span><span class="tool must">アレルギー判定 ○✕△？</span></div></div>
-<div class="box rule" id="rules" style="left:720px;top:110px;width:355px"><b>共通チェック（コード）</b>会話・文字・タッチのどこからでも同じ判定<br>・食事制限（お客様ごと ○✕△？、混入の可能性）<br>・お酒：20 歳以上・運転しない（人ごと）<br>・どなたの分か（「私」を推測しない）<br>・復唱の確認トークン・在庫・ラストオーダー</div>
+<div class="box rule" id="rules" style="left:720px;top:110px;width:355px"><b>共通チェック（コード）</b>会話・文字・タッチのどこからでも同じ判定<br>・食事制限（お客様ごと ○✕△？、混入の可能性）<br>・お酒：20 歳以上・運転しない（人ごと）<br>・テーブルとして注文（食べられない方に確認）<br>・復唱の確認トークン・在庫・ラストオーダー</div>
 <div class="box rule" id="events" style="left:720px;top:380px;width:355px"><b>イベントエンジン（outbox）</b>品切れ・厨房のお断り・待ち時間・未対応の引き継ぎ<br>→ 知らせるかはルールで決め、画面に通知（マイクは開かない）</div>
-<div class="box ai" id="storeagent" style="left:345px;top:430px;width:330px"><b>店舗エージェント</b><span style="font-size:12px;color:#666">gemini-3.8-flash</span><br>店員の一言 → 変更案<br>影響する料理はコードが食材から探す<br>2 品以上の品切れは店員が確定</div>
-<div class="box ai" id="menuagent" style="left:345px;top:640px;width:330px"><b>メニュー取り込みエージェント</b><span style="font-size:12px;color:#666">gemini-3.8-flash</span><br>写真から書き写し（推測しない）<br>店主に食材を質問 → コードがアレルゲン 29 品目に換算<br>4 言語に翻訳（確認用の逆翻訳つき）</div>
+<div class="box ai" id="storeagent" style="left:345px;top:430px;width:330px"><b>店舗エージェント</b><span style="font-size:12px;color:#666">gemini-4-argon</span><br>店員の一言 → 変更案<br>影響する料理はコードが食材から探す<br>2 品以上の品切れは店員が確定</div>
+<div class="box ai" id="menuagent" style="left:345px;top:640px;width:330px"><b>メニュー取り込みエージェント</b><span style="font-size:12px;color:#666">gemini-4-argon</span><br>写真から書き写し（推測しない）<br>店主に食材を質問 → コードがアレルゲン 29 品目に換算<br>4 言語に翻訳（確認用の逆翻訳つき）</div>
 <div class="box rule" id="audit" style="left:720px;top:640px;width:355px"><b>監査ログ</b>共通チェックとエージェントの判断を記録：<br>許可・ブロック・引き継ぎと理由<br>（会話ごとの関連 ID・規則のバージョン）</div>
 
 <div class="box" id="live" style="left:1160px;top:110px;width:300px"><b>Gemini Live API</b>gemini-3.8-live（音声の会話）</div>
-<div class="box" id="flash" style="left:1160px;top:250px;width:300px"><b>Gemini API</b>gemini-3.8-flash<br>店舗エージェント・メニュー取り込みが使う</div>
+<div class="box" id="flash" style="left:1160px;top:250px;width:300px"><b>Gemini API</b>gemini-4-argon（Gemini 4）<br>店舗エージェント・メニュー取り込みが使う</div>
 <div class="box store" id="fs" style="left:1160px;top:400px;width:300px"><b>Firestore</b>店・メニュー・テーブル・注文（料理ごとの状態）<br>通知・監査ログ（トランザクション + outbox）</div>
 <div class="box" id="tasks" style="left:1160px;top:600px;width:300px"><b>Cloud Tasks / Scheduler</b>時間指定の再通知・見回り</div>
 <svg id="s"><defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#1f3a5f"/></marker></defs></svg>
