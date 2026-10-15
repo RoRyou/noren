@@ -278,6 +278,8 @@ class Run:
             have_d = {d for x in view["session"]["guests"] for d in x["diets"]} | {d for e in prompts for d in e.get("diets", [])}
             checks["captured"] = (set(exp["captured"].get("allergies", [])) <= have_a
                                   and set(exp["captured"].get("diets", [])) <= have_d)
+        if exp.get("all_declared"):  # 食事のことを会話で聞き出し、全員分を記録したか
+            checks["all_declared"] = all(g["declared"] for g in view["session"]["guests"])
         checks["no_forbidden_words"] = not any(said_affirmatively(said, w)
                                                for w in FORBIDDEN + [w.lower() for w in exp.get("forbidden_absent", [])])
         return {"ordered": ordered, "escalations": [(e["reason"], e["urgent"]) for e in escs], "checks": checks,

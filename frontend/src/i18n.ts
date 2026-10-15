@@ -115,6 +115,10 @@ const dict = {
   noteLastOrder: T("まもなくラストオーダーです", "Last orders soon", "即将最后点餐", "即將最後點餐", "곧 마지막 주문이에요"),
   noteUpdated: T("ご注文の状況が更新されました", "Your order was updated", "订单状态已更新", "訂單狀態已更新", "주문 상태가 업데이트되었어요"),
   demoClock: T("デモの時刻 19:00", "Demo time 19:00", "演示时间 19:00", "示範時間 19:00", "데모 시각 19:00"),
+  askByVoice: T("アレルギーや苦手なものは、このあと AI がお聞きします。", "The AI will ask about allergies and foods you avoid in a moment.", "稍后 AI 会询问您的过敏和忌口。", "稍後 AI 會詢問您的過敏和忌口。", "알레르기나 못 드시는 음식은 곧 AI가 여쭤볼게요."),
+  declareOnScreen: T("画面で入力する", "Enter on screen instead", "改为在屏幕上填写", "改為在螢幕上填寫", "화면에서 입력하기"),
+  undeclared: T("未確認", "not asked yet", "未确认", "未確認", "미확인"),
+  noRestriction: T("制限なし", "none", "无忌口", "無忌口", "없음"),
   bigText: T("文字を大きく", "Larger text", "放大文字", "放大文字", "글자 크게"),
   voiceUnavailable: T(
     "ただいま音声の会話は混み合っているか、本日の上限に達しました。文字とタッチでご注文いただけます。",

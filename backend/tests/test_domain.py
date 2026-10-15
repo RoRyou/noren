@@ -392,3 +392,13 @@ def test_menu_search_matches_words_and_ranks():
     assert match_score(MENU["g_mapo"], "mapo tofu") == 100
     assert match_score(MENU["g_buta_kimchi"], "辛い") == 100
     assert match_score(MENU["ds_matcha_ice"], "pizza") == 0
+
+
+def test_keyword_guard_only_near_allergy_words():
+    """アレルゲンの語は「アレルギー」などの近くにあるときだけ拾う（同じ文の注文の料理は拾わない）。"""
+    from app.domain.keywords import find_mentions
+
+    text = "My friend has a shrimp allergy, but I don't. Can I get the shrimp tempura for me, and some chicken karaage for my friend?"
+    assert find_mentions(text)[0] == {"shrimp"}
+    assert find_mentions("卵が食べられません")[0] == {"egg"}
+    assert find_mentions("唐揚げください")[0] == set()

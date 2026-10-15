@@ -35,8 +35,15 @@ RULES = """\
   お客様がはっきり「はい」と言ってから submit_order を呼ぶ。復唱と送信を同じ返答の中でしない。
 - read_back の wait_min が 15 分以上なら、復唱のあとに「いま混んでいて、お料理まで○分ほどかかりそうです」と一言添える（目安と伝える）。
 - 「ご注文を受け付けました」と言うのは submit_order が ok を返した後だけ。厨房が受けるまでは「作っています」とは言わない。
-- アレルギー・食事制限は入座時に全員が申告済み（下の「ゲスト」の欄）。改めて全員に聞かない。
-  新しく聞いたら、その場で set_dietary_profile で記録する（どのゲストか分からなければ画面で選んでもらう）。
+- 食べられないもの（アレルギー・宗教・ベジタリアンなど）を聞き出すのは、あなたの大事な仕事。下の「ゲスト」の欄に
+  「未確認」の人がいる間は、おすすめより先に、会話の流れで自然に聞く。尋問のように並べず、気づかいとして一言で
+  （例：「お料理を選ぶ前に、苦手なものやアレルギーはありますか？お連れの方もどうぞ」）。
+  答えが曖昧なら、やさしく具体的に確かめる（例：「えびは少しでもだめですか？」「お出汁に魚が入っていても大丈夫ですか？」）。
+- 聞いたらその場で set_dietary_profile で記録する。「特にない」と言った人も allergies=[] diets=[] で記録する（記録しないと注文できない）。
+  少しでも症状が出る重いアレルギーなら severe=true。2 人以上のときは「ほかの方はいかがですか？」と全員分を確かめる。
+- 誰のことか分からないとき（「友だちがえびアレルギー」など）は、「画面のゲスト 1・ゲスト 2 で言うと、どちらの方ですか？」と聞く。
+  「私」「me」を勝手にゲストに結び付けない。
+- 「確認済み」の人には、同じことを聞き直さない。
 - 店のルールは入座の画面でお客様が読んでいる。最初の返答では、お通し（一人いくら）が付くことだけを一言添え、
   すぐにお客様の話に答える。ほかのルール（税込・支払い方法・チップなど）は聞かれたら答える。
 - 1 回の返答で扱う話題は 1 つにする。質問されたことに先に答える。
@@ -80,7 +87,8 @@ def table_summary(session: TableSession, phase: Phase, cart_names: list[str], or
         alcohol = ""
         if g.alcohol:
             alcohol = "、お酒可" if g.alcohol.adult and not g.alcohol.driving else "、お酒不可"
-        guests.append(f"- {g.id}（{g.label}）：{'、'.join(restr) or '制限なし'}{'（重い）' if g.severe else ''}{alcohol}")
+        diet = ("確認済み：" + ("、".join(restr) or "制限なし")) if g.declared else "未確認（まだ聞いていない）"
+        guests.append(f"- {g.id}（{g.label}）：{diet}{'（重い）' if g.severe else ''}{alcohol}")
     lines = [
         f"テーブル {session.table_no}、{session.party_size} 名、画面の言語 {LANG_NAME.get(session.lang, session.lang)}",
         f"段階：{phase.value} — {PHASE_GUIDE[phase]}",

@@ -168,3 +168,6 @@ input[type="text"], input:not([type]) { font: inherit; padding: 10px 12px; borde
 .big-text .bubble { font-size: 1.25rem; }
 .big-toggle { margin: 6px 14px 10px; font-size: 0.85rem; align-self: flex-start; width: auto; }
 .big-toggle.on { background: var(--accent); color: #fff; border: none; }
+.guest-status { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px 0; }
+.guest-status .chip { font-size: 0.8rem; cursor: default; }
+.guest-status .chip.pending { border-style: dashed; color: var(--muted); }

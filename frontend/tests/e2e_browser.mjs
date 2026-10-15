@@ -42,6 +42,10 @@ try {
   await page.getByText("Tap to start").click();
   await page.locator(".party button", { hasText: "2" }).click();
   await page.getByText("Next").click();
+  // 食事のことは AI が会話で聞く。ここでは「画面で入力する」から入れる経路を確かめる
+  await page.waitForSelector(".rules li");
+  check("入座：食事のことは AI が会話で聞くと案内", await page.getByText("The AI will ask about allergies").isVisible());
+  await page.getByText("Enter on screen instead").click();
   await page.waitForSelector(".declare-card");
   const cards = page.locator(".declare-card");
   await cards.nth(0).getByText("Shrimp", { exact: true }).click();

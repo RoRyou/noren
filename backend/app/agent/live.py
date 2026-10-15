@@ -93,6 +93,7 @@ class VoiceSession:
         self._watch: asyncio.Task | None = None
         self._awaiting_reply = False  # お客様の発言のあと、AI がまだ一度も話していない
         self.heard = 0  # お客様の発話・画面操作を受け取った回数
+        self._mentions: tuple[set[str], set[str]] = (set(), set())  # 直前のお客様の発話で拾ったアレルギー・食事制限
         # 1 回の返答で話した文字と呼んだツール（「入れました」と言ったのに add_item を呼んでいない対策）
         self._turn_text = ""
         self._turn_tool_names: list[str] = []
@@ -350,6 +351,7 @@ class VoiceSession:
                     else:
                         await self.send_json({"type": "turn_complete"})
                         await self._check_claims()
+                        await self._check_mentions()
         except asyncio.CancelledError:
             pass
         except Exception as e:  # 会話は閉じても、画面のタッチ操作は続けられる
@@ -363,7 +365,12 @@ class VoiceSession:
             await self.svc.escalate(self.session_id, Reason.medical, text, ["症状"], actor="keyword_guard",
                                     correlation_id=self.correlation(), translated=False)
             await self.emit({"type": "escalated", "reason": "medical", "urgent": True})
-        allergens, diets = find_mentions(text)
+        self._mentions = find_mentions(text)  # AI がこの返答で記録したかを、返答の後に確かめる
+
+    async def _check_mentions(self) -> None:
+        """お客様が言ったアレルギー・食事制限を、AI が記録しなかったときだけ画面で登録を確認する（AI の記録漏れの保険）。"""
+        allergens, diets = self._mentions
+        self._mentions = (set(), set())
         if allergens or diets:
             session = await self.svc.repo.session(self.session_id)
             known_a = {a for g in session.guests for a in g.allergies}

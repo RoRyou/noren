@@ -33,7 +33,7 @@ ALLERGY_WORDS: dict[str, list[str]] = {
     "gelatin": ["ゼラチン", "gelatin"],
 }
 # アレルギーの話をしているか（単語だけでは「えびが好き」と区別できないため、こちらと組み合わせる）
-ALLERGY_CONTEXT = ["アレルギー", "食べられない", "だめ", "ダメ", "allergic", "allergy", "can't eat", "cannot eat", "intoleran"]
+ALLERGY_CONTEXT = ["アレルギー", "食べられ", "苦手", "だめ", "ダメ", "抜き", "can't have", "avoid", "allergic", "allergy", "can't eat", "cannot eat", "intoleran"]
 DIET_WORDS: dict[str, list[str]] = {
     "halal": ["ハラール", "ハラル", "halal", "muslim", "ムスリム"],
     "vegetarian": ["ベジタリアン", "菜食", "vegetarian"],
@@ -44,13 +44,28 @@ DIET_WORDS: dict[str, list[str]] = {
 }
 
 
+NEAR = 25
+
+
+def _find_all(text: str, word: str) -> list[int]:
+    out, i = [], text.find(word)
+    while i != -1:
+        out.append(i)
+        i = text.find(word, i + 1)
+    return out
+
+
 def find_mentions(text: str) -> tuple[set[str], set[str]]:
     """文字起こしから（アレルゲンコード, 食事制限コード）を拾う。"""
     lower = text.lower()
     allergens: set[str] = set()
-    if any(w.lower() in lower for w in ALLERGY_CONTEXT):
-        for code, words in ALLERGY_WORDS.items():
-            if any(w.lower() in lower for w in words):
+    # アレルゲンの語は「アレルギー」などの語の近く（前後 25 文字）にあるときだけ拾う
+    # （「えびアレルギーです。友だちには唐揚げ」の唐揚げ＝鶏肉を拾わない）
+    spots = [i for w in ALLERGY_CONTEXT for i in _find_all(lower, w.lower())]
+    for code, words in ALLERGY_WORDS.items():
+        for w in words:
+            if any(abs(j - i) <= NEAR for j in _find_all(lower, w.lower()) for i in spots):
                 allergens.add(code)
+                break
     diets = {code for code, words in DIET_WORDS.items() if any(w.lower() in lower for w in words)}
     return allergens, diets

@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, Card, CartLine, Check, Guest } from "../api";
 import { Mic, Player } from "../audio";
-import { allergenName, expertLabel, hasVoice, Lang, statusLabel, t } from "../i18n";
+import { allergenName, DIETS, expertLabel, hasVoice, Lang, statusLabel, t } from "../i18n";
 
 type Turn = { role: "user" | "ai"; text: string; final: boolean };
 const CARD_KINDS = new Set(["sold_out", "rejected", "last_order"]); // お客様の画面にカードで知らせる通知
@@ -348,6 +348,16 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
   return (
     <div className={`table-screen${bigText ? " big-text" : ""}`}>
       <section className="left">
+        {/* ゲストごとの食事の確認状態（AI が会話で聞いて記録すると更新される） */}
+        <div className="guest-status">
+          {guests.map((g) => (
+            <span key={g.id} className={g.declared ? "chip on" : "chip pending"}>
+              {g.label}：{g.declared
+                ? [...g.allergies.map((a) => allergenName(lang, a)), ...g.diets.map((d) => DIETS.find((x) => x.code === d)?.[lang] ?? d)].join("・") || t(lang, "noRestriction")
+                : t(lang, "undeclared")}
+            </span>
+          ))}
+        </div>
         <div className="experts">
           {experts.map((e) => (
             <span key={e} className={`badge ${e}`}>

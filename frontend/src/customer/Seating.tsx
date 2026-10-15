@@ -21,8 +21,21 @@ export function Seating({ onDone }: { onDone: (sid: string, lang: Lang) => void 
     setSid(s.id);
     setGuests(s.guests);
     setDecls(s.guests.map((g) => ({ guest_id: g.id, allergies: [], diets: [], severe: false, none: false })));
+    await loadRules(s.id);
     setBusy(false);
-    setStep("declare");
+    setStep("notice"); // 食事のことは AI が会話の中で聞く（画面で入れたい人は「画面で入力」から）
+  }
+
+  async function loadRules(id: string) {
+    const view = await api.view(id);
+    const store = view.store;
+    const lines: string[] = [];
+    if (store.otoshi_price && store.otoshi_label) {
+      const label = store.otoshi_label[lang] || store.otoshi_label.en;
+      lines.push(lang === "ja" ? `お通し（${store.otoshi_label.ja}）：お一人 ${store.otoshi_price} 円` : `${label}: ¥${store.otoshi_price} / person`);
+    }
+    for (const r of store.rules) if (r.announce) lines.push(r.text[lang] || r.text.en || r.text.ja);
+    setRules(lines);
   }
 
   function toggle(i: number, field: "allergies" | "diets", code: string) {
@@ -38,15 +51,6 @@ export function Seating({ onDone }: { onDone: (sid: string, lang: Lang) => void 
   async function declare() {
     setBusy(true);
     await api.declare(sid, decls.map(({ guest_id, allergies, diets, severe }) => ({ guest_id, allergies, diets, severe })));
-    const view = await api.view(sid);
-    const store = view.store;
-    const lines: string[] = [];
-    if (store.otoshi_price && store.otoshi_label) {
-      const label = store.otoshi_label[lang] || store.otoshi_label.en;
-      lines.push(lang === "ja" ? `お通し（${store.otoshi_label.ja}）：お一人 ${store.otoshi_price} 円` : `${label}: ¥${store.otoshi_price} / person`);
-    }
-    for (const r of store.rules) if (r.announce) lines.push(r.text[lang] || r.text.en || r.text.ja);
-    setRules(lines);
     setBusy(false);
     setStep("notice");
   }
@@ -147,9 +151,11 @@ export function Seating({ onDone }: { onDone: (sid: string, lang: Lang) => void 
           <li key={r}>{r}</li>
         ))}
       </ul>
+      <p className="note">{t(lang, "askByVoice")}</p>
       <button className="primary big" onClick={() => onDone(sid, lang)}>
         {t(lang, "agree")}
       </button>
+      <button className="link" onClick={() => setStep("declare")}>{t(lang, "declareOnScreen")}</button>
     </div>
   );
 }
