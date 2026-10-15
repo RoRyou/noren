@@ -28,7 +28,7 @@
 
 ## 技術スタック
 
-Cloud Run（FastAPI + Agent Development Kit）· Gemini Live API（`gemini-3.8-live`）· Gemini API（`gemini-3.8-flash`）·
+Cloud Run（FastAPI + Agent Development Kit）· Gemini Live API（`gemini-3.8-live`）· Gemini API（`gemini-4-argon`：メニュー取り込み・店舗エージェント）·
 Firestore · Cloud Tasks · Vite + React
 
 ## ローカルで動かす
