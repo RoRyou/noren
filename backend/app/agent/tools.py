@@ -240,6 +240,9 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             cannot = [w.split(":", 1)[1] for w in check.warnings if w.startswith("not_for:")]
             if cannot:  # 召し上がらない方と理由（「ゲスト 2：卵を含みます」）
                 out["not_for"] = {gid: out["verdicts"].get(gid, {}).get("reasons") or ["お酒を飲めない方"] for gid in cannot}
+            if check.decision == Decision.need_table_ok:  # 断るのではなく、テーブルとして頼むかを聞く（言い方を渡す）
+                out["say"] = ("断らない。「お一人（" + "・".join(cannot) + "）が召し上がれない料理ですが、それでもご注文されますか？"
+                              "その方は召し上がらないでください」と聞く")
             if check.decision == Decision.need_guest:
                 await emit({"type": "ask_guest", "purpose": "item", "item_id": item_id, "qty": qty, "verdicts": out["verdicts"], "options": opts})
             elif check.decision == Decision.need_alcohol_check:
