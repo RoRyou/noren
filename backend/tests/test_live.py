@@ -108,3 +108,15 @@ def test_usage_delta_splits_text_and_audio():
         candidates_tokens_details=[types.ModalityTokenCount(modality=types.MediaModality.AUDIO, token_count=92),
                                    types.ModalityTokenCount(modality=types.MediaModality.TEXT, token_count=11)])
     assert usage_delta(meta) == {"in_text": 144, "in_audio": 107, "out_text": 11, "out_audio": 92, "thoughts": 66}
+
+
+async def test_silent_reply_without_tools_is_nudged_once(monkeypatch):
+    """お客様の「はい」「以上です」に AI が何も言わずに返答を終えたら、4 秒後に 1 回だけ促す（ZI-074）。"""
+    import app.agent.live as live
+
+    monkeypatch.setattr(live, "NUDGE_AFTER_S", 0.05)
+    v = await _voice()
+    v._new_turn()
+    v._watch = asyncio.create_task(v._after_tool_turn())  # 何も話さずに turn_complete が来たとき
+    await asyncio.sleep(0.2)
+    assert len(v.queue.sent) == 1 and "答えて" in v.queue.sent[0]

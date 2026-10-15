@@ -91,6 +91,7 @@ class VoiceSession:
         self._turn_spoke = False
         self._nudged = False
         self._watch: asyncio.Task | None = None
+        self._awaiting_reply = False  # お客様の発言のあと、AI がまだ一度も話していない
         self.heard = 0  # お客様の発話・画面操作を受け取った回数
         # 1 回の返答で話した文字と呼んだツール（「入れました」と言ったのに add_item を呼んでいない対策）
         self._turn_text = ""
@@ -216,6 +217,7 @@ class VoiceSession:
             self.queue.send_content(types.Content(role="user", parts=[types.Part(text=f"[画面操作] {text_ja}")]))
 
     def _new_turn(self, screen: bool = False) -> None:
+        self._awaiting_reply = True
         self._turn_tools = self._turn_spoke = self._nudged = False
         self._turn_text, self._turn_tool_names, self._turn_added_ok = "", [], False
         self._screen_turn, self._claim_checked = screen, False
@@ -231,7 +233,7 @@ class VoiceSession:
                 self.metrics["nudges"] += 1
                 log.info("silent after tools; nudging (%s)", self.correlation())
                 self.queue.send_content(types.Content(role="user", parts=[types.Part(
-                    text="[システム] 直前のツールの結果を、お客様に短く伝えてください。")]))
+                    text="[システム] お客様の直前の発言に、短く答えてください（ツールを使ったならその結果も）。")]))
                 await asyncio.sleep(NUDGE_AFTER_S)
             await self.send_json({"type": "turn_complete"})
         except asyncio.CancelledError:
@@ -328,6 +330,7 @@ class VoiceSession:
                                 self.metrics["first_audio_ms"].append(round((time.monotonic() - self._input_end) * 1000))
                                 self._input_end = None
                             self._turn_spoke = True
+                            self._awaiting_reply = False
                             self._cancel_watch()
                             await self.send_audio(p.inline_data.data)
                 if ev.interrupted:
@@ -341,7 +344,8 @@ class VoiceSession:
                         ai_partial = ""
                     self._arm_idle()
                     self._cancel_watch()
-                    if self._turn_tools and not self._turn_spoke:  # ツールの直後：この後に話すはず（まだ返答の途中）
+                    # 声がまだない：ツールの直後（この後に話すはず）か、何も言わずに終わった（まれに起きる）→ 待って促す
+                    if not self._turn_spoke and (self._turn_tools or self._turn_text == "" and self._awaiting_reply):
                         self._watch = asyncio.create_task(self._after_tool_turn())
                     else:
                         await self.send_json({"type": "turn_complete"})
