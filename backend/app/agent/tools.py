@@ -187,8 +187,13 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
     async def read_back() -> dict:
         """注文：送信前の復唱。カートを再チェックし、確認用の confirm_token を返す。画面に確認シートが出る。"""
         async def body():
+            prev = (await svc.repo.session(session_id)).confirm_token
             rb = await svc.read_back(session_id)
-            read_back_at[:] = [heard()]
+            if not (prev and rb.get("confirm_token") == prev):
+                read_back_at[:] = [heard()]  # 新しい内容の復唱：この後のお客様の返事を待つ
+            elif not read_back_at:
+                # 同じ内容をすでに復唱していた（前の会話で。返事の前に会話が閉じ、「はい」で開き直した場合）（ZI-076）
+                read_back_at[:] = [-1]
             await emit({"type": "read_back", **rb})
             return rb
         return await run("read_back", {}, body)

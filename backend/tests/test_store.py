@@ -348,3 +348,23 @@ async def test_parallel_adds_to_same_table_all_succeed(env):
                                      for item, g in [("s_edamame", "g1"), ("s_cucumber", "g2"), ("g_yakitori", "g3")]))
     assert all(c.ok for c, _ in results)
     assert sorted(l.item_id for l in (await repo.session(s.id)).cart) == ["g_yakitori", "s_cucumber", "s_edamame"]
+
+
+async def test_confirmation_in_new_voice_session_after_same_read_back(env):
+    """復唱の後、返事の前に会話が閉じても、同じ内容なら新しい会話の「はい」で送れる（ZI-076）。"""
+    from app.agent.tools import build_tools
+
+    svc, repo, *_ = env
+    s = await svc.seat("9", 1, "ja")
+    await svc.declare(s.id, [{"guest_id": "g1"}])
+
+    async def emit(_):
+        pass
+
+    first = {t.__name__: t for t in build_tools(svc, s.id, "ja", emit, lambda: "t", lambda: 1)}
+    await first["add_item"]("s_edamame", 1)
+    rb = await first["read_back"]()  # ここで会話が閉じた
+    second = {t.__name__: t for t in build_tools(svc, s.id, "ja", emit, lambda: "t", lambda: 1)}  # 「はい」で開き直す
+    again = await second["read_back"]()
+    assert again["confirm_token"] == rb["confirm_token"]
+    assert (await second["submit_order"](again["confirm_token"]))["ok"] is True
