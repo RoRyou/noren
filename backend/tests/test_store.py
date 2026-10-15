@@ -368,3 +368,32 @@ async def test_confirmation_in_new_voice_session_after_same_read_back(env):
     again = await second["read_back"]()
     assert again["confirm_token"] == rb["confirm_token"]
     assert (await second["submit_order"](again["confirm_token"]))["ok"] is True
+
+
+async def test_alcohol_confirmed_by_conversation(env):
+    """お酒の確認を会話で記録（confirm_alcohol）すれば、画面の操作なしで入れられる。運転する方には入らない。"""
+    from app.agent.tools import build_tools
+
+    svc, repo, *_ = env
+    s = await svc.seat("10", 2, "ja")
+    await svc.declare(s.id, [{"guest_id": "g1"}, {"guest_id": "g2"}])
+
+    async def emit(_):
+        pass
+
+    tools = {t.__name__: t for t in build_tools(svc, s.id, "ja", emit, lambda: "t")}
+    assert (await tools["add_item"]("d_beer", 1, "g1"))["decision"] == "need_alcohol_check"
+    assert (await tools["confirm_alcohol"]("g1", True, False))["can_drink"] is True
+    assert (await tools["add_item"]("d_beer", 1, "g1"))["decision"] == "ok"
+    await tools["confirm_alcohol"]("g2", True, True)
+    assert (await tools["add_item"]("d_beer", 1, "g2"))["decision"] == "rejected"
+
+
+async def test_declare_and_add_at_the_same_time_keep_both(env):
+    """申告とカートの追加が同時に動いても、申告が消えない（ZI-078）。"""
+    svc, repo, *_ = env
+    s = await svc.seat("11", 2, "en")
+    await asyncio.gather(svc.declare(s.id, [{"guest_id": "g2", "allergies": ["shrimp"]}, {"guest_id": "g1"}]),
+                         svc.add_to_cart(s.id, "g_yakitori", 1, "g2"))
+    s2 = await repo.session(s.id)
+    assert s2.guest("g2").allergies == ["shrimp"] and all(g.declared for g in s2.guests)

@@ -8,7 +8,7 @@ import { OwnerPage } from "./owner/OwnerPage";
 import { StaffBoard } from "./staff/StaffBoard";
 import "./styles.css";
 
-// 画面の切り替え：/staff = 店員、/owner = 店主、/demo = お客様と店員を並べて表示（審査用）、それ以外 = お客様
+// 画面の切り替え：/staff = 店員、/owner = 店主、/demo = お客様の画面（審査用。店員・店主の画面は別タブで開く）、それ以外 = お客様
 function App() {
   const [ready, setReady] = useState(false);
   const [table, setTable] = useState<{ sid: string; lang: Lang } | null>(() => {
@@ -27,10 +27,13 @@ function App() {
   if (path.startsWith("/owner")) return <OwnerPage />;
   if (path.startsWith("/demo")) {
     return (
-      <div className="demo-split">
+      <div className="demo-single">
         <iframe src="/table" title="お客様" />
-        <iframe src="/staff" title="店員" />
-        <button className="reset" onClick={async () => { await api.demoStart(true); sessionStorage.clear(); location.reload(); }}>リセット</button>
+        <div className="demo-bar">
+          <a href="/staff" target="_blank" rel="noreferrer">店員の画面 / Staff screen ↗</a>
+          <a href="/owner" target="_blank" rel="noreferrer">店主の画面 / Owner ↗</a>
+          <button className="reset" onClick={async () => { await api.demoStart(true); sessionStorage.clear(); location.reload(); }}>リセット</button>
+        </div>
       </div>
     );
   }

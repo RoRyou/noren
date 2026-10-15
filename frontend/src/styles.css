@@ -171,3 +171,7 @@ input[type="text"], input:not([type]) { font: inherit; padding: 10px 12px; borde
 .guest-status { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px 0; }
 .guest-status .chip { font-size: 0.8rem; cursor: default; }
 .guest-status .chip.pending { border-style: dashed; color: var(--muted); }
+.demo-single { height: 100vh; display: flex; flex-direction: column; }
+.demo-single iframe { flex: 1; width: 100%; border: none; }
+.demo-bar { display: flex; gap: 14px; align-items: center; justify-content: flex-end; padding: 6px 14px; border-top: 1px solid var(--line); font-size: 0.85rem; background: var(--bg, #fff); }
+.demo-bar a { color: var(--muted); }

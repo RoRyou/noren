@@ -40,6 +40,10 @@ def _cart_lock(session_id: str) -> asyncio.Lock:
     return _CART_LOCKS.setdefault(session_id, asyncio.Lock())
 
 
+def _cart_fields(session: TableSession) -> dict:
+    return {"cart": [l.model_dump(mode="json") for l in session.cart], "confirm_token": session.confirm_token}
+
+
 STOPWORDS = {"the", "a", "an", "of", "and", "with", "some", "any", "do", "you", "have", "is", "there", "please", "menu"}
 
 
@@ -82,7 +86,15 @@ class TableService:
         return session
 
     async def declare(self, session_id: str, declarations: list[dict]) -> TableSession:
-        """入座時の申告（必須）。declarations: [{guest_id, allergies, diets, severe, label?}]。「なし」も申告。"""
+        """食事の申告（会話で聞いた内容、または画面で入力）。declarations: [{guest_id, allergies, diets, severe, label?}]。「なし」も申告。"""
+        async with _cart_lock(session_id):  # 同時に動くカートの書き込みと順番に（ZI-078）
+            session = await self._declare(session_id, declarations)
+        severe = [g for g in session.guests if g.severe and g.allergies]
+        for g in severe:
+            await self.escalate(session_id, esc_rules.Reason.severe_allergy, "", unknown_facts=[])
+        return session
+
+    async def _declare(self, session_id: str, declarations: list[dict]) -> TableSession:
         session = await self.repo.session(session_id)
         for d in declarations:
             g = session.guest(d["guest_id"])
@@ -96,12 +108,13 @@ class TableService:
                 g.label = d["label"]
         await self.repo.update_session(session_id, {"guests": [g.model_dump(mode="json") for g in session.guests]})
         await self.repo.audit("customer", "declare", {"declarations": declarations}, "ok", session_id=session_id)
-        severe = [g for g in session.guests if g.severe and g.allergies]
-        for g in severe:
-            await self.escalate(session_id, esc_rules.Reason.severe_allergy, "", unknown_facts=[])
         return session
 
     async def set_alcohol(self, session_id: str, guest_id: str, adult: bool, driving: bool) -> TableSession:
+        async with _cart_lock(session_id):
+            return await self._set_alcohol(session_id, guest_id, adult, driving)
+
+    async def _set_alcohol(self, session_id: str, guest_id: str, adult: bool, driving: bool) -> TableSession:
         session = await self.repo.session(session_id)
         g = session.guest(guest_id)
         if g is None:
@@ -141,7 +154,7 @@ class TableService:
                     session.cart.append(CartLine(line_id=f"cl_{uuid.uuid4().hex[:8]}", item_id=item_id, qty=qty,
                                                  for_guest=check.for_guest, options=options or {}))
                 session.confirm_token = ""  # カートが変わったら復唱をやり直す
-                transaction.set(session_ref, _dump(session))
+                transaction.update(session_ref, _cart_fields(session))  # 申告など他の欄を上書きしない（ZI-078）
             return check, session
 
         async with _cart_lock(session_id):
@@ -167,13 +180,13 @@ class TableService:
             if qty <= 0:
                 session.cart = [l for l in session.cart if l.line_id != line_id]
                 session.confirm_token = ""
-                transaction.set(session_ref, _dump(session))
+                transaction.update(session_ref, _cart_fields(session))  # 申告など他の欄を上書きしない（ZI-078）
                 return None, session
             check = check_add(session, store, MenuItem.model_validate(item_snap.to_dict()), qty, line.for_guest, clock)
             if check.ok:
                 line.qty = qty
                 session.confirm_token = ""
-                transaction.set(session_ref, _dump(session))
+                transaction.update(session_ref, _cart_fields(session))  # 申告など他の欄を上書きしない（ZI-078）
             return check, session
 
         async with _cart_lock(session_id):

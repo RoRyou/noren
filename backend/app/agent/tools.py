@@ -22,12 +22,13 @@ log = logging.getLogger("noren.tools")
 
 EXPERT = {
     "search_menu": "menu", "get_item": "menu", "recommend": "recommend", "get_store_knowledge": "knowledge",
-    "check_dietary": "allergy", "set_dietary_profile": "allergy", "add_item": "order", "update_item": "order",
+    "check_dietary": "allergy", "set_dietary_profile": "allergy", "confirm_alcohol": "order", "add_item": "order", "update_item": "order",
     "read_back": "order", "submit_order": "order", "cancel_order_item": "order", "get_order_status": "order",
     "call_staff": "staff", "escalate": "staff", "request_bill": "bill",
 }
 DEDUPE_S = 5.0
-MUTATING = {"add_item", "update_item", "submit_order", "escalate", "call_staff", "set_dietary_profile", "cancel_order_item"}
+MAX_CALLS_PER_TURN = 16
+MUTATING = {"add_item", "confirm_alcohol", "update_item", "submit_order", "escalate", "call_staff", "set_dietary_profile", "cancel_order_item"}
 
 
 def _brief(card: dict, lang: str) -> dict:
@@ -57,9 +58,16 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
     """heard：お客様の発話・画面操作を受け取った回数。復唱の後にお客様の返事があったかを見るのに使う。"""
     recent: dict[str, tuple[float, dict]] = {}
     read_back_at: list[int] = []  # 復唱したときの heard()
+    calls: list[int] = []  # [この返答で呼んだ回数, そのときの heard()]
 
     async def run(name: str, args: dict, body: Callable[[], Awaitable[dict]]) -> dict:
         key = name + json.dumps(args, sort_keys=True, ensure_ascii=False)
+        turn = heard()
+        calls[:] = [calls[0] + 1 if calls and calls[1] == turn else 1, turn] if calls else [1, turn]
+        if calls[0] > MAX_CALLS_PER_TURN:  # 同じ呼び出しを繰り返して止まらないときの歯止め（ZI-078）
+            log.warning("%s too many tool calls (%s)", correlation(), name)
+            return {"ok": False, "error": "too_many_calls",
+                    "say": "ツールを呼ぶのをやめ、いまのカートと分かっていることをお客様に伝えて、次にどうするか聞いてください。"}
         if name in MUTATING and key in recent and time.monotonic() - recent[key][0] < DEDUPE_S:
             return recent[key][1]  # 同じ呼び出しの繰り返し → 前の結果を返す
         await emit({"type": "expert", "expert": EXPERT.get(name, "other"), "tool": name})
@@ -69,7 +77,8 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             log.warning("%s %s %s failed: %r", correlation(), name, json.dumps(args, ensure_ascii=False), e)
             return {"ok": False, "error": "invalid_arguments" if isinstance(e, (KeyError, ValueError, TypeError)) else "failed",
                     "hint": "item_id は検索・おすすめの結果の item_id、line_id はカートの [line_id=...] を使う。分からなければ search_menu で確かめる"}
-        if result.get("reason") != "not_confirmed_yet":  # 「返事を待って」はまとめない（返事の直後の送信を通す）
+        # まとめるのは通った結果だけ（「返事を待って」「お酒の確認が必要」などの後のやり直しは通す）
+        if result.get("reason") != "not_confirmed_yet" and result.get("decision") in (None, "ok"):
             recent[key] = (time.monotonic(), result)
         log.info("%s %s %s → %s", correlation(), name, json.dumps(args, ensure_ascii=False),
                  json.dumps(result, ensure_ascii=False)[:300])
@@ -140,6 +149,14 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             await emit({"type": "guests_updated", "guests": [x.model_dump() for x in s.guests]})
             return {"ok": True, "guest": s.guest(guest_id).model_dump(), "escalated": severe}
         return await run("set_dietary_profile", {"guest_id": guest_id, "allergies": allergies, "diets": diets, "severe": severe}, body)
+
+    async def confirm_alcohol(guest_id: str, adult: bool, driving: bool) -> dict:
+        """お酒の確認：その方が 20 歳以上か（adult）、今日運転するか（driving）を、会話で聞いた答えのとおり記録する（自己申告）。"""
+        async def body():
+            s = await svc.set_alcohol(session_id, guest_id, adult, driving)
+            await emit({"type": "guests_updated", "guests": [x.model_dump() for x in s.guests]})
+            return {"ok": True, "can_drink": adult and not driving}
+        return await run("confirm_alcohol", {"guest_id": guest_id, "adult": adult, "driving": driving}, body)
 
     async def add_item(item_id: str, qty: int = 1, for_guest: str = "", options: list[str] | None = None) -> dict:
         """注文：カートに追加する。options は料理の選択肢を "グループ=選択肢" の形で（例：["size=large"]）。
@@ -264,5 +281,5 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             return {"ok": True, "urgent": data["urgent"]}
         return await run("escalate", {"reason": reason, "guest_words_ja": guest_words_ja}, body)
 
-    return [search_menu, get_item, recommend, get_store_knowledge, check_dietary, set_dietary_profile, add_item,
+    return [search_menu, get_item, recommend, get_store_knowledge, check_dietary, set_dietary_profile, confirm_alcohol, add_item,
             update_item, read_back, submit_order, get_order_status, cancel_order_item, call_staff, request_bill, escalate]
