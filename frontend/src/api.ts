@@ -38,7 +38,7 @@ export type Guest = {
 export type CartLine = { line_id: string; item_id: string; qty: number; for_guest: string | null; options?: Record<string, string> };
 
 export type Check = {
-  decision: "ok" | "need_declaration" | "need_guest" | "need_alcohol_check" | "need_staff" | "rejected";
+  decision: "ok" | "need_declaration" | "need_guest" | "need_table_ok" | "need_alcohol_check" | "need_staff" | "rejected";
   reasons: string[];
   for_guest: string | null;
   verdicts: Record<string, { mark: string; verdict: string; reasons: string[] }>;

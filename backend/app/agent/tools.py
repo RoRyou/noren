@@ -158,16 +158,22 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             return {"ok": True, "can_drink": adult and not driving}
         return await run("confirm_alcohol", {"guest_id": guest_id, "adult": adult, "driving": driving}, body)
 
-    async def add_item(item_id: str, qty: int = 1, for_guest: str = "", options: list[str] | None = None) -> dict:
-        """注文：カートに追加する。options は料理の選択肢を "グループ=選択肢" の形で（例：["size=large"]）。
-        選ばなければ既定の選択肢になる。結果の decision に従う：ok / need_guest（画面でゲストを選んでもらう）/
-        need_alcohol_check（画面で 20 歳以上・運転しないかを選んでもらう）/ need_staff（△？ のため店員の確認が必要）/
+    async def add_item(item_id: str, qty: int = 1, for_guest: str = "", options: list[str] | None = None,
+                       table_ok: bool = False) -> dict:
+        """注文：カートに追加する。ふつうは for_guest を空にして、テーブル全体の料理として入れる。
+        options は料理の選択肢を "グループ=選択肢" の形で（例：["size=large"]）。選ばなければ既定の選択肢になる。
+        結果の decision に従う：ok / need_table_ok（食べられない・飲めない方がいる。not_for の方を伝えて
+        「それでもご注文されますか？」と聞き、はいなら table_ok=true で呼び直す）/ need_alcohol_check（全員に 20 歳以上か・
+        今日運転しないかを聞き、confirm_alcohol で記録してから呼び直す）/ need_staff（店員の確認が必要）/
         need_declaration（申告がまだ）/ rejected（理由と代わりの料理 alternatives を伝える）。"""
         async def body():
             opts = dict(o.split("=", 1) for o in (options or []) if "=" in o)
             check, s = await svc.add_to_cart(session_id, item_id, qty, for_guest or None, opts or None,
-                                             actor="reception_agent", correlation_id=correlation())
+                                             actor="reception_agent", correlation_id=correlation(), table_ok=table_ok)
             out = check.to_dict()
+            cannot = [w.split(":", 1)[1] for w in check.warnings if w.startswith("not_for:")]
+            if cannot:  # 召し上がらない方と理由（「ゲスト 2：卵を含みます」）
+                out["not_for"] = {gid: out["verdicts"].get(gid, {}).get("reasons") or ["お酒を飲めない方"] for gid in cannot}
             if check.decision == Decision.need_guest:
                 await emit({"type": "ask_guest", "purpose": "item", "item_id": item_id, "qty": qty, "verdicts": out["verdicts"], "options": opts})
             elif check.decision == Decision.need_alcohol_check:
@@ -183,7 +189,8 @@ def build_tools(svc: TableService, session_id: str, lang: str, emit: Emit, corre
             if check.ok:  # 「受け付けました」と言ってしまう対策（注文はまだ送っていない）
                 out["note"] = "カートに入れただけで、注文はまだ送っていません。ほかに注文がなければ read_back で復唱します。"
             return out
-        return await run("add_item", {"item_id": item_id, "qty": qty, "for_guest": for_guest, "options": options or []}, body)
+        return await run("add_item", {"item_id": item_id, "qty": qty, "for_guest": for_guest, "options": options or [],
+                                      "table_ok": table_ok}, body)
 
     async def update_item(line_id: str, qty: int) -> dict:
         """注文：カートの数量を変える（0 で削除）。line_id はカートの [line_id=...]。"""

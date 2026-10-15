@@ -19,7 +19,8 @@ from app.domain.models import CartLine, MenuItem, SessionStatus, StoreSettings, 
 class Decision(StrEnum):
     ok = "ok"
     need_declaration = "need_declaration"  # まだ食事制限の申告をしていないお客様がいる
-    need_guest = "need_guest"  # どなたの分か、画面でゲストを選んでもらう
+    need_guest = "need_guest"  # どなたの分か選んでもらう（画面の「追加」から人を指定する経路で使う）
+    need_table_ok = "need_table_ok"  # 同じテーブルに食べられない方がいる。テーブルとして頼むか確かめる
     need_alcohol_check = "need_alcohol_check"  # 20 歳以上か・運転しないかの確認
     need_staff = "need_staff"  # △ / ？ → 自動では通さない。店員に確認できる
     rejected = "rejected"
@@ -60,8 +61,13 @@ def check_add(
     for_guest: str | None,
     now_hhmm: str | None = None,
     options: dict[str, str] | None = None,
+    table_ok: bool = False,
 ) -> CartCheck:
-    """1 行追加（または数量変更）してよいか。"""
+    """1 行追加（または数量変更）してよいか。
+
+    どなたの分か決めずに頼まれた料理は、テーブル全体の料理として扱う。食べられない（飲めない）方がいれば
+    need_table_ok を返し、お客様が「それでも頼む」と答えたら（table_ok）、その方を not_for に記録して入れる。
+    特定の方の分として頼まれた料理（for_guest）は、その方の判定で止める。"""
     if session.status in (SessionStatus.billing, SessionStatus.closed):
         return CartCheck(Decision.rejected, ["session_billing"])
     if _past_last_order(store, now_hhmm):
@@ -91,12 +97,20 @@ def check_add(
         target = session.guests[0].id
 
     verdicts = judge_table(item, session.guests)
-    differs = any(v.verdict != Verdict.ok for v in verdicts.values())
-    if target is None and (differs or item.is_alcohol):
-        # 「私」「me」を AI がゲストに結び付けない。画面で選んでもらう。
-        # お酒を何杯も頼まれたら、一人一杯ずつ選んでもらう（年齢・運転の確認が人ごとなので）
-        reasons = ["who_is_it_for"] + (["one_per_guest"] if item.is_alcohol and qty > 1 else [])
-        return CartCheck(Decision.need_guest, reasons, None, verdicts)
+    if target is None:  # テーブル全体の料理（「私」「me」を AI がゲストに結び付けない）
+        cannot = [gid for gid, v in verdicts.items() if v.verdict != Verdict.ok]
+        if item.is_alcohol:
+            if any(g.alcohol is None for g in session.guests):
+                return CartCheck(Decision.need_alcohol_check, ["alcohol_check_required"], None, verdicts)
+            cannot += [g.id for g in session.guests
+                       if g.id not in cannot and not (g.alcohol and g.alcohol.adult and not g.alcohol.driving)]
+        if len(cannot) == len(session.guests):
+            reason = "alcohol_not_allowed" if item.is_alcohol else "nobody_can_eat"
+            return CartCheck(Decision.rejected, [reason], None, verdicts)
+        not_for = [f"not_for:{gid}" for gid in sorted(cannot)]
+        if cannot and not table_ok:
+            return CartCheck(Decision.need_table_ok, ["table_has_restriction"], None, verdicts, not_for)
+        return CartCheck(Decision.ok, [], None, verdicts, not_for)
 
     check = CartCheck(Decision.ok, [], target, verdicts)
     if target is not None:
@@ -129,6 +143,8 @@ def recheck_cart(
             problems.append((line, CartCheck(Decision.rejected, ["not_available"])))
             continue
         result = check_add(session, store, item, line.qty, line.for_guest, now_hhmm, line.options)
+        if result.decision == Decision.need_table_ok and {w.split(":", 1)[1] for w in result.warnings} <= set(line.not_for):
+            continue  # 召し上がらない方を了承して入れた料理（その後に新しく食べられない方が増えていなければよい）
         if not result.ok:
             problems.append((line, result))
     return problems

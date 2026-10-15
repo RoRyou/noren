@@ -58,8 +58,9 @@ try {
   await shot("02_notice");
   await page.getByText("Start", { exact: true }).click();
 
-  // 2) メインの画面：おすすめのカードと、ゲストごとの判定
-  await page.waitForSelector(".card");
+  // 2) メインの画面：最初は使い方の説明（勝手なおすすめは出さない）。メニューにゲストごとの判定
+  await page.waitForSelector(".intro");
+  check("最初は使い方とお通しの説明", (await page.locator(".intro").innerText()).includes("otoshi"));
   await page.waitForTimeout(800);
   await shot("03_main");
   await page.locator(".tab", { hasText: "Menu" }).click();

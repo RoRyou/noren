@@ -127,7 +127,8 @@ class TableService:
 
     # --- カート ---------------------------------------------------------------
     async def add_to_cart(self, session_id: str, item_id: str, qty: int = 1, for_guest: str | None = None,
-                          options: dict | None = None, actor: str = "customer", correlation_id: str = "") -> tuple[CartCheck, TableSession]:
+                          options: dict | None = None, actor: str = "customer", correlation_id: str = "",
+                          table_ok: bool = False) -> tuple[CartCheck, TableSession]:
         """カートに追加。音声・文字・タッチのどこから来ても cart.check_add を通る。"""
         store = await self.repo.store()
         session_ref = self.repo.col("sessions").document(session_id)
@@ -145,14 +146,16 @@ class TableService:
             existing = next((l for l in session.cart if l.item_id == item_id and l.options == (options or {})
                              and (l.for_guest == for_guest or (for_guest is None and l.for_guest is None))), None)
             total = qty + (existing.qty if existing else 0)
-            check = check_add(session, store, item, total, for_guest, clock, options)
+            check = check_add(session, store, item, total, for_guest, clock, options, table_ok)
             if check.ok:
+                not_for = [w.split(":", 1)[1] for w in check.warnings if w.startswith("not_for:")]
                 if existing:
                     existing.qty = total
                     existing.for_guest = check.for_guest
+                    existing.not_for = not_for
                 else:
                     session.cart.append(CartLine(line_id=f"cl_{uuid.uuid4().hex[:8]}", item_id=item_id, qty=qty,
-                                                 for_guest=check.for_guest, options=options or {}))
+                                                 for_guest=check.for_guest, options=options or {}, not_for=not_for))
                 session.confirm_token = ""  # カートが変わったら復唱をやり直す
                 transaction.update(session_ref, _cart_fields(session))  # 申告など他の欄を上書きしない（ZI-078）
             return check, session
@@ -207,7 +210,8 @@ class TableService:
             item = items[l.item_id]
             lines.append({
                 "line_id": l.line_id, "item_id": l.item_id, "name": item.name.get(session.lang), "qty": l.qty,
-                "for_guest": l.for_guest, "price": unit_price(item, l.options), "amount": unit_price(item, l.options) * l.qty,
+                "for_guest": l.for_guest, "not_for": l.not_for,
+                "price": unit_price(item, l.options), "amount": unit_price(item, l.options) * l.qty,
                 "options": {g.key: next(c.label.get(session.lang) for c in g.choices if c.key == l.options.get(g.key, g.default))
                             for g in item.option_groups},
                 "allergens": item.allergens, "cross_contact": item.cross_contact,

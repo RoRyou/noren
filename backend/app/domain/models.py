@@ -105,6 +105,7 @@ class CartLine(BaseModel):
     qty: int
     for_guest: str | None = None
     options: dict[str, str] = {}
+    not_for: list[str] = []  # テーブルで分ける料理を、召し上がらない（食べられない・飲めない）ゲスト
 
 
 class Charge(BaseModel):
@@ -135,6 +136,7 @@ class OrderLine(BaseModel):
     unit_price: int  # 注文時点の価格（スナップショット）
     for_guest: str | None = None
     options: dict[str, str] = {}
+    not_for: list[str] = []
     is_alcohol: bool = False
     status: LineStatus = LineStatus.accepted
     reject_reason: str = ""

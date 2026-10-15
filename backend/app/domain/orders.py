@@ -84,6 +84,7 @@ def build_lines(cart: list[CartLine], items: dict[str, MenuItem]) -> list[OrderL
             unit_price=unit_price(items[c.item_id], c.options),
             for_guest=c.for_guest,
             options=c.options,
+            not_for=c.not_for,
             is_alcohol=items[c.item_id].is_alcohol,
         )
         for c in cart
@@ -155,7 +156,7 @@ def make_bill(session: TableSession, orders: list[Order]) -> Bill:
                 continue
             amount = l.unit_price * l.qty
             bill.lines.append({"line_id": l.line_id, "name": l.name.model_dump(by_alias=True), "qty": l.qty,
-                               "unit_price": l.unit_price, "amount": amount, "for_guest": l.for_guest})
+                               "unit_price": l.unit_price, "amount": amount, "for_guest": l.for_guest, "not_for": l.not_for})
             bill.total += amount
     for c in session.charges:
         amount = c.unit_price * c.qty
@@ -172,6 +173,11 @@ def make_bill(session: TableSession, orders: list[Order]) -> Bill:
         gid = line["for_guest"]
         if gid in own:
             own[gid] += line["amount"]
+        elif line.get("not_for"):  # 召し上がらない方を除いた人数で分ける
+            payers = [g for g in guest_ids if g not in line["not_for"]] or guest_ids
+            each, rest = divmod(line["amount"], len(payers))
+            for i, g in enumerate(payers):
+                own[g] += each + (rest if i == 0 else 0)
     shared = bill.total - sum(own.values())
     n = max(len(guest_ids), 1)
     shared_per_person = shared // n

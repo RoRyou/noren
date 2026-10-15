@@ -65,7 +65,7 @@ async def test_dialogue1_end_to_end(env):
     table_q = hub.subscribe(repo.store_id, f"table:{s.id}")
 
     check, _ = await svc.add_to_cart(s.id, "f_karaage", 1)
-    assert check.decision == Decision.need_guest
+    assert check.decision == Decision.need_table_ok
     check, _ = await svc.add_to_cart(s.id, "f_karaage", 1, for_guest="g2")
     assert check.ok and check.warnings == ["do_not_share:g1"]
     check, _ = await svc.add_to_cart(s.id, "s_hiyayakko", 1)

@@ -278,10 +278,15 @@ export function TableScreen({ sid, lang }: { sid: string; lang: Lang }) {
         setSheet(null);
         break;
       case "need_guest":
+      case "need_table_ok": // 画面で押して頼むときは、どなたの分かを選んでもらう（会話では AI がテーブルとして確かめる）
         setSheet({ kind: "guest", item_id, qty, verdicts: check.verdicts, multi: check.reasons.includes("one_per_guest") });
         break;
       case "need_alcohol_check":
-        setSheet({ kind: "alcohol", item_id, qty, for_guest: check.for_guest ?? guests[0]?.id });
+        if (!check.for_guest && guests.length > 1) {
+          setSheet({ kind: "guest", item_id, qty, verdicts: check.verdicts, multi: qty > 1 }); // お酒は飲む方を選んでから確認
+        } else {
+          setSheet({ kind: "alcohol", item_id, qty, for_guest: check.for_guest ?? guests[0]?.id });
+        }
         break;
       default:
         setSheet({ kind: "blocked", item_id, check, alternatives });

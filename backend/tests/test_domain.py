@@ -96,11 +96,17 @@ def test_no_restriction_is_ok_even_if_unconfirmed():
 
 # --- カートの共通チェック（会話例 1・2・3） --------------------------------------
 
-def test_dialogue1_who_is_it_for():
+def test_dialogue1_table_as_one():
+    """テーブルを一つとして扱う：食べられない方がいれば確かめ、了承されたらその方を not_for に記録して入れる。"""
     s = session(guest("g1", ["shrimp"]), guest("g2"))
     r = check_add(s, STORE, MENU["f_karaage"], 1, None)
-    assert r.decision == Decision.need_guest  # 「me」をゲストに結び付けない
+    assert r.decision == Decision.need_table_ok and r.warnings == ["not_for:g1"]  # 「me」をゲストに結び付けない
     assert r.verdicts["g1"].verdict == Verdict.cross and r.verdicts["g2"].verdict == Verdict.ok
+    r = check_add(s, STORE, MENU["f_karaage"], 1, None, table_ok=True)
+    assert r.ok and r.warnings == ["not_for:g1"]
+    assert check_add(s, STORE, MENU["f_ebi_ten"], 1, "g1").decision == Decision.rejected  # 本人の分としては止まる
+    all_shrimp = session(guest("g1", ["shrimp"]), guest("g2", ["shrimp"]))
+    assert check_add(all_shrimp, STORE, MENU["f_ebi_ten"], 1, None, table_ok=True).reasons == ["nobody_can_eat"]
     r = check_add(s, STORE, MENU["f_karaage"], 1, "g2")
     assert r.ok and r.warnings == ["do_not_share:g1"]
     assert check_add(s, STORE, MENU["f_karaage"], 1, "g1").decision == Decision.need_staff  # △ は自動で通さない
@@ -109,7 +115,7 @@ def test_dialogue1_who_is_it_for():
 
 def test_dialogue1_alcohol():
     s = session(guest("g1", ["shrimp"]), guest("g2"))
-    assert check_add(s, STORE, MENU["d_beer"], 1, None).decision == Decision.need_guest
+    assert check_add(s, STORE, MENU["d_beer"], 1, None).decision == Decision.need_alcohol_check  # 全員に確かめる
     assert check_add(s, STORE, MENU["d_beer"], 1, "g2").decision == Decision.need_alcohol_check
     s.guests[1].alcohol = AlcoholCheck(adult=True, driving=False)
     assert check_add(s, STORE, MENU["d_beer"], 1, "g2").ok
@@ -117,11 +123,14 @@ def test_dialogue1_alcohol():
     assert check_add(s, STORE, MENU["d_beer"], 1, "g2").reasons == ["alcohol_not_allowed"]
     s.guests[1].alcohol = AlcoholCheck(adult=False, driving=False)
     assert check_add(s, STORE, MENU["d_beer"], 1, "g2").decision == Decision.rejected
+    s.guests[0].alcohol = AlcoholCheck(adult=True, driving=False)  # テーブルとして：g2 は飲めない
+    assert check_add(s, STORE, MENU["d_beer"], 1, None).decision == Decision.need_table_ok
+    assert check_add(s, STORE, MENU["d_beer"], 1, None, table_ok=True).warnings == ["not_for:g2"]
 
 
 def test_dialogue2_quick_order_still_checks_alcohol():
     s = session(guest("g1"), guest("g2"), guest("g3"))
-    assert check_add(s, STORE, MENU["d_beer"], 1, None).decision == Decision.need_guest
+    assert check_add(s, STORE, MENU["d_beer"], 1, None).decision == Decision.need_alcohol_check
     assert check_add(s, STORE, MENU["d_beer"], 1, "g1").decision == Decision.need_alcohol_check
     assert check_add(s, STORE, MENU["s_edamame"], 1, None).ok
 
@@ -405,3 +414,11 @@ def test_keyword_guard_only_near_allergy_words():
     assert find_mentions(text)[0] == {"shrimp"}
     assert find_mentions("卵が食べられません")[0] == {"egg"}
     assert find_mentions("唐揚げください")[0] == set()
+
+
+def test_bill_per_guest_skips_guests_who_do_not_eat():
+    """テーブルの料理でも、召し上がらない方（not_for）には割り当てない。"""
+    s = session(guest("g1", ["egg"]), guest("g2"), guest("g3"))
+    lines = build_lines([CartLine(line_id="l1", item_id="s_dashimaki", qty=1, not_for=["g1"])], MENU)
+    bill = make_bill(s, [Order(id="o1", session_id="s1", lines=lines, idempotency_key="k")])
+    assert bill.per_guest == {"g1": 0, "g2": 264, "g3": 264}  # 528 円を g2・g3 で

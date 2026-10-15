@@ -95,6 +95,7 @@ export function StaffBoard() {
             <div key={l.line_id} className={`kline ${l.status}`}>
               <b>{tableNo(l.session_id)}番</b> {l.name.ja} ×{l.qty}
               {l.for_guest && <span className="small"> {l.for_guest}</span>}
+              {l.not_for?.length > 0 && <span className="tag">{l.not_for.join("・")} は召し上がらない</span>}
               {l.is_alcohol && <span className="tag">お酒・年齢を目視</span>}
               {late.has(l.line_id) && <span className="tag late">{late.get(l.line_id)} 分経過</span>}
               <span className="status">{STATUS_JA[l.status]}</span>
