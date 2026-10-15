@@ -70,6 +70,7 @@ def usage_delta(meta) -> dict[str, int]:
 def clean_text(text: str) -> str:
     """AI の文字起こしにまれに混ざる HTML の切れ端（「</td></tr>」「<!-- Section 5:」など）を取り除く（ZI-088）。"""
     text = re.sub(r"<!--.*?(-->|$)", "", text, flags=re.S)
+    text = re.sub(r"\((no speech|inaudible|silence)\)", "", text, flags=re.I)  # 文字起こしの注記
     text = re.sub(r"</?[a-zA-Z][^>\n]*>?", "", text)
     return re.sub(r"\n\s*\n+", "\n", text).strip()
 
