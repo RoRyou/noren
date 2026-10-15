@@ -67,6 +67,13 @@ def usage_delta(meta) -> dict[str, int]:
     return {k: v for k, v in counts.items() if v}
 
 
+def clean_text(text: str) -> str:
+    """AI の文字起こしにまれに混ざる HTML の切れ端（「</td></tr>」「<!-- Section 5:」など）を取り除く（ZI-088）。"""
+    text = re.sub(r"<!--.*?(-->|$)", "", text, flags=re.S)
+    text = re.sub(r"</?[a-zA-Z][^>\n]*>?", "", text)
+    return re.sub(r"\n\s*\n+", "\n", text).strip()
+
+
 # このツールを呼んだ返答は、もう画面にカードや注文の欄が出ている（add_item は次の段階のおすすめを出す）
 SHOWS_CARDS = {"recommend", "search_menu", "get_item", "read_back", "submit_order", "add_item"}
 
@@ -349,13 +356,13 @@ class VoiceSession:
                     if ev.partial:  # 途中の文字は差分で届くので、ここでつなげてから送る
                         ai_partial += ev.output_transcription.text
                         self._ai_partial = ai_partial
-                        await self.send_json({"type": "transcript", "role": "ai", "text": ai_partial, "final": False})
+                        await self.send_json({"type": "transcript", "role": "ai", "text": clean_text(ai_partial), "final": False})
                     else:
                         ai_partial = self._ai_partial = ""
-                        self._turn_text += ev.output_transcription.text
-                        await self.send_json({"type": "transcript", "role": "ai", "text": ev.output_transcription.text,
-                                              "final": True})
-                        await self.svc.repo.append_turn(self.session_id, "ai", ev.output_transcription.text)
+                        said = clean_text(ev.output_transcription.text)
+                        self._turn_text += said
+                        await self.send_json({"type": "transcript", "role": "ai", "text": said, "final": True})
+                        await self.svc.repo.append_turn(self.session_id, "ai", said)
                 for fc in ev.get_function_calls():
                     self.metrics["tool_calls"].append(fc.name)
                     self._turn_tools = True
@@ -383,10 +390,11 @@ class VoiceSession:
                 if ev.turn_complete:
                     self.metrics["turns"] += 1
                     if ai_partial:  # 確定の文字起こしが来ないまま区切られた → 途中までの文字を確定として送る
-                        self._turn_text += ai_partial
+                        said = clean_text(ai_partial)
+                        self._turn_text += said
                         self._ai_partial = ""
-                        await self.send_json({"type": "transcript", "role": "ai", "text": ai_partial, "final": True})
-                        await self.svc.repo.append_turn(self.session_id, "ai", ai_partial)
+                        await self.send_json({"type": "transcript", "role": "ai", "text": said, "final": True})
+                        await self.svc.repo.append_turn(self.session_id, "ai", said)
                         ai_partial = ""
                     self._arm_idle()
                     self._cancel_watch()

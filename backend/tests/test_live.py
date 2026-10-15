@@ -172,3 +172,11 @@ async def test_no_nudge_when_ai_ended_with_a_question(monkeypatch):
     v._watch = asyncio.create_task(v._after_tool_turn())
     await asyncio.sleep(0.2)
     assert v.queue.sent == []
+
+
+def test_clean_text_removes_html_fragments():
+    from app.agent.live import clean_text
+
+    raw = "ほかの方に、アレルギーはございませんか？</td>\n</tr>\n</tbody></table>\n</table>\n<br>\n\n  <!-- Section 5:"
+    assert clean_text(raw) == "ほかの方に、アレルギーはございませんか？"
+    assert clean_text("生ビール 2 杯ですね。") == "生ビール 2 杯ですね。"
